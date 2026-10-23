@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="paper" data-appearance="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>سنجه — SANJEH</title>
+    <meta
+      name="description"
+      content="سنجه، آزمون‌ساز و آزمون‌دهندهٔ آفلاین با پشتیبانی چندزبانه، تم‌های متنوع و ذخیرهٔ محلی."
+    />
+    <meta name="theme-color" content="#faf8f4" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link
+      rel="preload"
+      href="/fonts/Vazirmatn-Variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('sanjeh:boot');
+          if (!raw) return;
+          var saved = JSON.parse(raw);
+          var html = document.documentElement;
+          if (saved.theme) html.setAttribute('data-theme', saved.theme);
+          var mode =
+            saved.appearance === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : saved.appearance === 'dark'
+                ? 'dark'
+                : 'light';
+          html.setAttribute('data-appearance', mode);
+          html.classList.toggle('dark', mode === 'dark');
+          if (saved.language) {
+            html.setAttribute('lang', saved.language);
+            html.setAttribute('dir', saved.language === 'fa' ? 'rtl' : 'ltr');
+          }
+        } catch (error) {
+          /* preferences are optional at boot */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>سنجه برای کار به جاوااسکریپت نیاز دارد. / SANJEH requires JavaScript.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

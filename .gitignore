@@ -1,0 +1,55 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# build outputs
+dist/
+dist-ssr/
+*.local
+
+# native build products and caches
+src-tauri/target/
+src-tauri/gen/
+src-tauri/gen/android/app/build/
+src-tauri/gen/apple/build/
+src-tauri/gen/apple/DerivedData/
+src-tauri/gen/**/*.xcworkspace/xcuserdata/
+*.apk
+*.aab
+*.dmg
+*.msi
+*.msix
+*.AppImage
+*.deb
+*.rpm
+*.ipa
+*.app/
+*.exe
+
+# platform SDKs / toolchains
+android-sdk/
+android-ndk/
+ndk-bundle/
+.gradle/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+
+# env and secrets
+.env
+.env.*
+!.env.example
+
+# logs and caches
+logs/
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+.vite/
+.eslintcache
+coverage/
+.vitest/
+.DS_Store
+Thumbs.db

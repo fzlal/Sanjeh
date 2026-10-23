@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web — typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Smoke-test the static bundle
+        run: |
+          python3 -m http.server 4173 --directory dist > /dev/null 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID' EXIT
+          sleep 1
+          curl -fsS http://127.0.0.1:4173/ > /dev/null
+          curl -fsS http://127.0.0.1:4173/manifest.webmanifest > /dev/null
+          curl -fsS http://127.0.0.1:4173/sw.js > /dev/null
+          curl -fsS http://127.0.0.1:4173/fonts/Vazirmatn-Variable.woff2 > /dev/null
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanjeh-web-${{ github.sha }}
+          path: dist
+          retention-days: 14
+          if-no-files-found: error
