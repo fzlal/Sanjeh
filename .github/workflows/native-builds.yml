@@ -115,7 +115,30 @@ jobs:
 
       - name: Install Android NDK and build tools
         run: |
-          sdkmanager --install "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            echo "NDK install attempt $attempt"
+            # پاک‌سازی باقی‌مانده‌ها قبل از هر تلاش
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION"
+            rm -rf "$ANDROID_HOME/.temp"/* 2>/dev/null || true
+            rm -rf "$ANDROID_HOME/.downloadIntermediates"/* 2>/dev/null || true
+
+            if sdkmanager --install "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0"; then
+              # تأیید نصب واقعی NDK (وجود source.properties)
+              if [ -f "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties" ]; then
+                echo "NDK installed successfully."
+                break
+              fi
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "NDK install failed after 3 attempts."
+              exit 1
+            fi
+            echo "Retrying after cleanup..."
+            sleep 5
+          done
+
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
