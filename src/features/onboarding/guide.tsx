@@ -180,6 +180,7 @@ export function GuideDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         closeLabel={t('close')}
+        overlayClassName="bg-black/45 backdrop-blur-md"
         className="flex h-auto max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100%-1rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(43rem,calc(100dvh-3rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] lg:h-[36rem]"
         style={{
           overflow: 'hidden',

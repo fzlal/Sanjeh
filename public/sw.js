@@ -1,11 +1,20 @@
 /* SANJEH offline shell. No network data is ever uploaded or cached. */
 importScripts('./precache-manifest.js');
 
-const VERSION = 'sanjeh-v2';
-const SHELL_CACHE = `${VERSION}-shell`;
-const ASSET_CACHE = `${VERSION}-assets`;
-// The build may be served from the origin root or a subpath such as /Sanjeh/.
+// Every deploy gets a unique id, so a new service worker always ships fresh
+// cache names and this build's caches are independent from older builds.
+const BUILD = self.__SANJEH_BUILD_ID__ || 'dev';
 const BASE = new URL('./', self.location.href).pathname;
+// CacheStorage is shared by every app on the origin (GitHub Pages project
+// sites share one), so cache names are scoped to this deployment path.
+const SCOPE =
+  BASE === '/'
+    ? 'root'
+    : BASE.replace(/^\/+|\/+$/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_');
+const CACHE_PREFIX = `sanjeh:${SCOPE}:`;
+const SHELL_CACHE = `${CACHE_PREFIX}${BUILD}-shell`;
+const ASSET_CACHE = `${CACHE_PREFIX}${BUILD}-assets`;
+const LEGACY_CACHES = ['sanjeh-v2-shell', 'sanjeh-v2-assets'];
 
 const SHELL_ASSETS = [
   BASE,
@@ -17,7 +26,7 @@ const SHELL_ASSETS = [
   `${BASE}icons/icon-maskable-512.png`,
   `${BASE}icons/icon-180.png`,
   `${BASE}icons/favicon.svg`,
-  ...self.__SANJEH_PRECACHE__.map((asset) => `${BASE}${asset}`),
+  ...(self.__SANJEH_PRECACHE__ || []).map((asset) => `${BASE}${asset}`),
 ];
 
 self.addEventListener('install', (event) => {
@@ -37,12 +46,33 @@ self.addEventListener('activate', (event) => {
         Promise.all(
           keys
             .filter((key) => key !== SHELL_CACHE && key !== ASSET_CACHE)
+            .filter(
+              (key) => key.startsWith(CACHE_PREFIX) || LEGACY_CACHES.includes(key),
+            )
             .map((key) => caches.delete(key)),
         ),
       )
       .then(() => self.clients.claim()),
   );
 });
+
+function matchShell() {
+  return caches
+    .open(SHELL_CACHE)
+    .then((cache) =>
+      cache.match(`${BASE}index.html`).then((cached) => cached || cache.match(BASE)),
+    );
+}
+
+function matchCached(request) {
+  return caches
+    .open(ASSET_CACHE)
+    .then((cache) => cache.match(request))
+    .then((cached) => {
+      if (cached) return cached;
+      return caches.open(SHELL_CACHE).then((cache) => cache.match(request));
+    });
+}
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
@@ -53,32 +83,35 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      // Bypass the HTTP cache so a fresh deploy is picked up immediately;
+      // hosting like GitHub Pages may keep serving a stale index.html.
+      fetch(request, { cache: 'no-store' })
         .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
+          if (!response.ok) {
+            return matchShell().then((cached) => cached || response);
+          }
+          const copy = response.clone();
+          event.waitUntil(
             caches
               .open(SHELL_CACHE)
-              .then((cache) => cache.put(`${BASE}index.html`, copy));
-          }
+              .then((cache) => cache.put(`${BASE}index.html`, copy)),
+          );
           return response;
         })
-        .catch(() =>
-          caches
-            .match(`${BASE}index.html`)
-            .then((cached) => cached || caches.match(BASE)),
-        ),
+        .catch(() => matchShell().then((cached) => cached || Response.error())),
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
+    matchCached(request).then((cached) => {
       if (cached) return cached;
       return fetch(request).then((response) => {
         if (response.ok && response.type === 'basic') {
           const copy = response.clone();
-          caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy));
+          event.waitUntil(
+            caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy)),
+          );
         }
         return response;
       });

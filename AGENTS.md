@@ -287,6 +287,18 @@ Do not fork this layout; extend the component instead.
   `public/sw.js` imports it so the hashed JS/CSS are cached on the first visit.
   Keep the import and the plugin in sync, and keep `updateViaCache: 'none'` on
   registration so an updated worker never imports a stale list.
+- The manifest carries a unique build ID per deploy. Service worker cache names
+  include that ID and a scope derived from the worker path, and activation
+  deletes only caches with the same scope prefix plus the legacy
+  `sanjeh-v2-*` names — never every cache on the origin, because GitHub Pages
+  project sites share an origin. Navigations are fetched with
+  `cache: 'no-store'` so a new deploy is not masked by a stale HTTP-cached
+  `index.html`.
+- `src/lib/pwa.ts` registers the worker, checks for updates on load, on
+  visibility, on `online`, and every 30 minutes, and reloads once when a new
+  worker takes control (never on first install). `holdAutoUpdate()` in
+  `App.tsx` defers that reload during onboarding, exams, and the editor/import
+  screens; keep new critical flows inside that guard.
 - `.github/workflows/native-builds.yml`: Tauri desktop (Linux x64/arm64 as
   deb + rpm + AppImage, Windows x64 as NSIS + MSI, macOS universal as app +
   dmg), Android debug APK, iOS simulator, on tags.

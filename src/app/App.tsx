@@ -24,6 +24,7 @@ import {
   saveSession,
 } from '@/storage/db';
 import { requestPersistentStorage } from '@/storage/durability';
+import { holdAutoUpdate } from '@/lib/pwa';
 
 type Route =
   | { name: 'dashboard' }
@@ -45,6 +46,18 @@ export function App() {
   useEffect(() => {
     void requestPersistentStorage();
   }, []);
+
+  const updatesBlocked =
+    !ready ||
+    !settings.onboardingComplete ||
+    route.name === 'exam' ||
+    route.name === 'editor' ||
+    route.name === 'importExam';
+
+  useEffect(() => {
+    if (!updatesBlocked) return;
+    return holdAutoUpdate();
+  }, [updatesBlocked]);
 
   const autoGuide =
     ready &&

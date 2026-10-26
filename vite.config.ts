@@ -12,10 +12,12 @@ function precacheManifest(): Plugin {
       const assets = Object.keys(bundle).filter((fileName) =>
         /\.(?:js|css)$/.test(fileName),
       );
+      // A fresh id per build gives the service worker new cache names.
+      const buildId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
       this.emitFile({
         type: 'asset',
         fileName: 'precache-manifest.js',
-        source: `self.__SANJEH_PRECACHE__ = ${JSON.stringify(assets)};\n`,
+        source: `self.__SANJEH_BUILD_ID__ = ${JSON.stringify(buildId)};\nself.__SANJEH_PRECACHE__ = ${JSON.stringify(assets)};\n`,
       });
     },
   };

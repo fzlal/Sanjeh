@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { Root } from './app/root';
+import { registerServiceWorker } from './lib/pwa';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element is missing.');
@@ -12,12 +13,4 @@ createRoot(container).render(
   </StrictMode>,
 );
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register(`${import.meta.env.BASE_URL}sw.js`, { updateViaCache: 'none' })
-      .catch(() => {
-        /* offline support is progressive; the app still works online */
-      });
-  });
-}
+registerServiceWorker();

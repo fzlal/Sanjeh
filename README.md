@@ -161,6 +161,13 @@ build on every push to `main`; enable it once under Settings → Pages → Build
 deployment → Source: **GitHub Actions**. GitHub Pages on a private repository
 requires a plan that includes it.
 
+Every deployment gets a fresh build ID, so the service worker installs new
+caches and removes only its own previous ones. Installed clients check for
+updates on load, when the tab becomes visible, and every 30 minutes; a new
+build reloads the app automatically, without clearing the browser cache. The
+reload waits until an active exam, editor, or import screen is closed so no work
+is interrupted.
+
 Web data belongs to its origin: exams created on `localhost:5173` do not appear
 on the Pages site. Move them with a backup ZIP.
 

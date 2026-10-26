@@ -9,13 +9,22 @@ export const DialogClose = DialogPrimitive.Close;
 
 export function DialogContent({
   className,
+  overlayClassName,
   children,
   closeLabel = 'Close',
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content> & { closeLabel?: string }) {
+}: ComponentProps<typeof DialogPrimitive.Content> & {
+  closeLabel?: string;
+  overlayClassName?: string;
+}) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="animate-fade-in fixed inset-0 z-50 bg-black/25 backdrop-blur-[3px]" />
+      <DialogPrimitive.Overlay
+        className={cn(
+          'animate-fade-in fixed inset-0 z-50 bg-black/25 backdrop-blur-[3px]',
+          overlayClassName,
+        )}
+      />
       <DialogPrimitive.Content
         className={cn(
           'glass-strong animate-dialog-in fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[1.75rem] p-6',
