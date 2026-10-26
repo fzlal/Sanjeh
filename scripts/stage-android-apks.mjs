@@ -41,7 +41,7 @@ function classify(file) {
   const path = relative(apkRoot, file).toLowerCase();
   if (path.includes('universal')) return 'universal';
   if (path.includes('arm64')) return 'arm64-v8a';
-  if (path.includes('armeabi-v7a') || path.includes('armv7')) return 'armeabi-v7a';
+  if (path.includes('arm')) return 'armeabi-v7a';
   if (path.includes('x86_64')) return 'x86_64';
   if (path.includes('x86') || path.includes('i686')) return 'x86';
   return null;
