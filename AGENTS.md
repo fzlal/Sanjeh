@@ -349,3 +349,6 @@ Do not fork this layout; extend the component instead.
   `.hover-lift`). Keep entrances short (≤ 340 ms), never animate layout
   properties, and never remove the global `prefers-reduced-motion` override.
 - Comments only for non-obvious WHY. No dead code, no half migrations.
+- Keep `README.md` and `README-fa.md` in sync; each starts with a flag link to
+  the other. Lead with plain-language use and keep build internals under the
+  developer section.

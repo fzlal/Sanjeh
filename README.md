@@ -1,106 +1,181 @@
 # سنجه — SANJEH
 
-An offline-first exam runner. SANJEH never shows exam content: it
-stores exam booklets and optional descriptive answer PDFs locally, turns a
-compact QZ1 answer key — or a hand-entered key — into a bubble answer sheet,
-and issues a report card. Exams can also run with no answer key at all, in
-which case only the selected options are shown after submission.
+[🇮🇷 نسخهٔ فارسی](README-fa.md) · **English**
 
-Everything stays on the device. No account, no server, no telemetry, no
-external AI calls.
+SANJEH is a private exam companion for paper tests that works offline. Build an
+exam, set up its booklets and timers, prepare the answer key, collect answers,
+and get a report card — without an account, a server, or an internet connection.
 
-## Features
+[Try SANJEH](#get-started) · [How it works](#how-an-exam-works) ·
+[Features](#what-you-can-do) · [Privacy](#privacy) ·
+[For developers](#for-developers)
 
-- **Booklets with optional PDFs, their own questions, and time.** Create as
-  many booklets (دفترچه) as the paper exam has. Each booklet holds its question
-  count and its own time limit, plus up to 20 optional exam PDFs; answer PDFs
-  are optional too and shared by the whole exam. Every uploaded file gets an
-  editable title that defaults to its filename, with a 20 MB per-file cap.
-  Files are stored verbatim — as raw files in the native desktop store and as
-  Blobs in IndexedDB on the web — with a SHA-256 digest and an immutable id, so
-  you can download them again but their bytes can never be silently replaced;
-  the app never reads, renders, or uploads them.
-- **Booklet timers that advance on their own.** When a booklet's time ends the
-  app moves to the next booklet automatically, and only that booklet's
-  questions can be answered — earlier and later rows stay visible but locked.
-  A "پایان دفترچه" button ends the current booklet early; its remaining time is
-  never carried into the next booklet. Scheduling can be set while creating the
-  exam or later in the editor: start immediately, at a fixed time, or inside a
-  fixed or flexible window. The date-time picker follows the active language —
-  Jalali in Persian and Gregorian in English — using the device's local
-  timezone.
-- **Three answer-key modes.** Choose at creation:
-  - **AI answer key** — paste or upload a single QZ1 line generated outside the
-    app. It defines the question count and the correct options. Grok has given
-    us the best and most accurate results in our experience, and AI can still
-    make mistakes — so every key stays editable.
-  - **Manual answer key** — no AI prompt and no answer-key file. The question
-    count comes from the booklets and you pick the single correct option of
-    every question by hand; picking another option replaces it.
-  - **No answer key** — the exam is purely for practice: after submission only
-    the selected options are shown and no score is calculated.
-- **Editable, relational keys.** Options can be corrected while importing,
-  later in the exam editor, and even after an attempt. Saving a key updates
-  every attempt of that exam and re-scores submitted ones; only keys, title, and
-  description follow the exam — question count, booklets, and timers stay
-  frozen. `?` means the answer is unresolved: the app asks the user to choose
-  the answer and blocks create/save until every `?` is resolved. `-` is an
-  explicit exclusion and stays excluded.
-- **Answer sheet that matches the paper.** Up to 40 rows per column, filled
-  left-to-right even in RTL, four large bubbles per question, and the reference
-  legend: unanswered, incorrect, correct, excluded. While building an exam the
-  key preview stays collapsed in an accordion, so answers cannot be seen before
-  the attempt starts. Students pick exactly one option per question; when a key
-  lists several correct options, selecting any one of them counts.
-- **Report card.** After submission the same sheet becomes the student report
-  card: correct answers in green, wrong selections in red, correct-but-unselected
-  options outlined in green, unresolved and excluded questions marked distinctly.
-  Every correct answer earns 3 points and every wrong answer deducts 1, so the
-  percentage can be negative. Exams without a key instead show a choices-only
-  sheet with the selected options and no score.
-- **Offline and local.** The desktop build persists to a native Tauri store in
-  the app data folder; the web build uses IndexedDB with a persistent-storage
-  request. PWA install and Tauri builds for Linux (deb, rpm, AppImage for
-  x86_64 and arm64), Windows (NSIS, MSI for x86_64), macOS (app and dmg for
-  arm64, x86_64, and universal), Android (universal and per-ABI APKs), and iOS
-  are supported; native artifacts are produced in CI.
-- **Two languages, eighteen palettes.** Persian (RTL, default) and English
-  (LTR), each palette with light and dark tokens. Displayed dates and times use
-  the language's calendar: Jalali for Persian, Gregorian for English.
-- **Backup and restore.** A version-6 ZIP with a manifest plus the original PDF
-  files; older JSON v2–v5 backups are upgraded on import.
+## Why SANJEH?
+
+- **Your exams stay yours.** Everything is stored on your own device. No
+  account, no cloud, no telemetry, no external AI calls.
+- **Made for Persian classrooms.** Persian is the default language, the layout
+  is right-to-left, and dates follow the Jalali calendar. English is included
+  too.
+- **Works where the internet doesn't.** Use the installable web app, or a
+  dedicated app on Android, Windows, macOS, and Linux. Your data stays available
+  offline.
+- **As familiar as paper.** Booklets, four-option bubbles, page-by-page timers,
+  and a report card that feels like a marked answer sheet.
+
+## Get started
+
+| Platform | How to get it |
+| --- | --- |
+| **Web / PWA** | [Open the web app](https://fzlal.github.io/Sanjeh/). In Chrome or Edge choose **Install app**; on iPhone or iPad use **Add to Home Screen**. |
+| **Android** | Download an APK from [Releases](https://github.com/fzlal/Sanjeh/releases). If you are unsure which file to pick, take the **universal** APK. |
+| **Windows / macOS / Linux** | Download the installer for your system from [Releases](https://github.com/fzlal/Sanjeh/releases). |
+
+Each platform keeps its own local data. To move exams between the web app,
+desktop, and Android, create a **Backup** ZIP in one app and import it in the
+other.
+
+> **iOS:** the build workflow produces an unsigned simulator build for
+> development. There is no installable iOS release yet.
 
 ## How an exam works
 
-1. Create an exam, choose how the answer key will be supplied (AI QZ1, manual,
-   or none), and add one or more booklets with their question counts and time
-   limits. Booklet PDFs and descriptive answer PDFs are optional; add them if
-   you want to distribute or keep them, adjusting titles as needed. Pick the
-   schedule here or later in the exam editor. The answer-key mode is fixed once
-   the exam is created.
-2. For the **AI answer key**, open the prompt from the app, attach the
-   descriptive answer PDFs (when available) in an external AI chat, and send it.
-   The AI must act only as a converter — never as a solver — and must keep the
-   seed in the third field. Paste the returned QZ1 line back into the app; there
-   is exactly one key per exam.
-   For the **manual answer key**, skip the AI entirely and pick the correct
-   options for each question in the key editor. For **no answer key**, no key
-   work is needed at all.
-3. Review the key sheet. In the AI and manual modes every `?` must be resolved
-   (or explicitly excluded) before the exam can be created.
-4. Students open the exam, tap bubbles, and submit. Each booklet keeps its own
-   timer: the active booklet advances automatically, or the student can finish
-   it early without carrying the remaining time forward. Autosave and
-   auto-submit are handled locally, including attempts that expire while the app
-   is closed — the next launch settles them.
-5. The report card shows the score and the completed answer sheet. If an answer
-   was wrong, correct it from the key editor on the report card; the score is
-   recalculated and stored. Exams created without a key show only the selected
-   options and no score or key editor. Booklet PDFs are downloadable during the
-   attempt when present, and both PDF groups are available after it when files
-   exist.
+New here? The whole flow is five steps.
 
-### QZ1 format
+1. **Create the exam.** Give it a name, choose how the answer key will be
+   entered, and add one or more booklets (دفترچه) with their question counts and
+   time limits. Exam PDFs and descriptive answer PDFs are optional. Set the
+   schedule now or later in the editor.
+
+2. **Prepare the key.** Use an externally generated QZ1 key, enter the correct
+   options by hand, or choose the no-key practice mode.
+
+3. **Review the key sheet.** Every unresolved `?` must be resolved (or
+   explicitly excluded with `-`) before the exam can be created. Keys stay
+   editable later.
+
+4. **Run the exam.** Students open the exam and tap one bubble per question.
+   Each booklet has its own timer; when time ends, the app moves to the next
+   booklet automatically and locks the previous one. A "پایان دفترچه" button
+   ends the current booklet early; its remaining time is never carried forward.
+   Autosave and auto-submit work locally, even if the app closes and is opened
+   again later.
+
+5. **Read the report card.** Correct answers are green, wrong selections are
+   red, and every score is calculated automatically. If the key was wrong, fix
+   it from the report card and the score is recalculated.
+
+## What you can do
+
+### Exams that behave like paper
+
+Create as many booklets as the paper exam has, give each its own question count
+and time limit, and attach up to 20 optional PDFs per group (20 MB per file).
+Exam PDFs stay with their booklet; descriptive answer PDFs are shared by the
+whole exam. Uploaded files keep an editable title that defaults to the filename.
+The app stores their original bytes with an immutable id and a SHA-256 digest,
+so they can be downloaded again but never silently replaced; it never reads,
+renders, or uploads them. Booklet PDFs can be downloaded during an attempt, and
+both PDF groups are available afterwards.
+
+### Three ways to prepare the key
+
+- **AI-assisted key.** Copy the app's conversion prompt, paste it into an
+  external AI chat together with any answer PDFs, and bring the returned QZ1
+  line back. The prompt asks the AI to act only as a converter, not a solver.
+  The app itself never contacts an AI service, and there is exactly one key per
+  exam.
+- **Manual key.** Skip the prompt and pick the correct option for every
+  question yourself; the question count comes from the booklets. Picking another
+  option replaces the previous one.
+- **No key.** Run a practice exam that shows only the selected options after
+  submission, with no score.
+
+Keys stay linked to every attempt and remain editable. Fixing a key at any
+time — even after students have submitted — re-scores every attempt of that
+exam. Only the key, title, and description follow later edits; booklets,
+question counts, and timers stay frozen once the exam exists.
+
+### Clear, automatic scoring
+
+Every correct answer earns **3 points**, every wrong answer deducts **1**, and
+unanswered questions earn nothing. The percentage is earned points divided by
+the maximum (3 × scorable questions), so it can be negative as well as 100%.
+When a key accepts several options for a question, selecting any one of them
+counts as correct.
+
+### Scheduling that fits the class
+
+Start immediately, start at a fixed time, or open a fixed or flexible window.
+The date-time picker follows the active language — Jalali in Persian, Gregorian
+in English — using the device's local timezone.
+
+### A familiar answer sheet
+
+The sheet supports up to 40 rows per column, fills left-to-right even in RTL,
+uses four large bubbles per question, and shows a legend for unanswered,
+correct, incorrect, and excluded questions. While building an exam, the key
+preview stays collapsed so answers cannot be seen before the attempt starts.
+
+### Persian and English, light and dark
+
+Two languages and eighteen palettes, each with light and dark tokens. Dates and
+times follow the selected calendar and the device's timezone.
+
+### Backup and restore
+
+Export a version-6 ZIP containing a manifest and the original PDF files, and
+import it on another device or browser. Older JSON v2–v5 backups are upgraded
+automatically.
+
+### A guide that teaches itself
+
+A short in-app guide introduces the full workflow on first launch and can be
+skipped. It is available again from the header and Settings.
+
+## Privacy
+
+- PDFs, keys, answers, and results live in the app's local data folder on
+  desktop and in IndexedDB on the web. PDFs are stored as raw bytes, never as
+  base64 and never in the HTTP cache; the web build asks the browser for
+  persistent storage so it does not evict them under pressure.
+- SANJEH sends nothing anywhere. The AI prompt is copied to your clipboard for
+  you to use with a service of your choice; that service's policies apply.
+- Clearing the app's data (or site data on the web) removes everything. Export
+  a backup first.
+
+## Good to know
+
+**Does SANJEH store exam questions?**
+No. It stores the exam structure, booklets, answer keys, answer sheets,
+optional PDFs, and results. Question papers are never read or rendered.
+
+**Do I need an account or an internet connection?**
+No. Everything runs locally. Only the optional AI-assisted key step uses an
+external chat service of your choice.
+
+**Can I use the same exams on my phone and laptop?**
+Yes, by moving a Backup ZIP between them. Each app keeps its own local store;
+the web app is also tied to its site address, so `localhost` and the published
+site do not share data automatically.
+
+**Which Android file should I download?**
+The universal APK works on every device. The smaller per-ABI APKs are for
+specific processors and are listed next to it in Releases.
+
+**Can I change a key after students submit?**
+Yes. The score of every attempt is recalculated, and the exam editor shows the
+updated result.
+
+**How do updates work?**
+The installed web app checks for a new deployment on load, when it becomes
+visible, and every 30 minutes. It reloads automatically when a new version is
+ready, but waits until no exam, editor, or import screen is open and the first-run
+guide is dismissed. Native apps are updated by installing a newer release.
+
+## Reference: QZ1 answer keys
+
+An AI-assisted key is a single compact line generated outside the app:
 
 ```
 QZ1|N|SEED|A1|A2|...|AN
@@ -124,18 +199,14 @@ the percentage is the earned points over the maximum (3 × scorable questions),
 so it can be negative (down to −33.3%) as well as 100%. Exams in the no-key mode
 have no denominator and no score; their results show the selected options only.
 
-## Privacy
+## For developers
 
-- PDFs, keys, answers, and results live in the app's local data folder on
-  desktop and in IndexedDB on the web. PDFs are stored as raw bytes, never as
-  base64 and never in the HTTP cache; the web build asks the browser for
-  persistent storage so it does not evict them under pressure.
-- The app sends nothing anywhere. The prompt is copied to your clipboard for
-  you to use with a service of your choice; that service's policies apply.
-- Clearing the app's data (or site data on the web) removes everything. Export
-  a backup.
+SANJEH is a React 19 + TypeScript (strict) + Vite + Tailwind 4 + Radix UI app,
+wrapped by Tauri 2 for desktop and mobile. The web, PWA, and native shells share
+the same UI. The desktop build persists through a native local store; the web
+build uses IndexedDB.
 
-## Development
+### Run locally
 
 ```bash
 npm install
@@ -146,10 +217,15 @@ npm test
 npm run build
 npm run build:pages # static bundle for GitHub Pages (relative base)
 npm run tauri dev   # native shell
+npm run icons       # regenerate platform icons from icon-source/icon.json
 ```
 
 Node 20+ is required (CI uses Node 24). Native builds need the Rust toolchain
 and the platform prerequisites from the Tauri 2 documentation.
+
+Always run `typecheck`, `lint`, `test`, and `build` before calling work done.
+UI changes need a DOM-level smoke test in a real browser; this repository is
+verified without screenshots.
 
 ### Icons
 
@@ -174,18 +250,37 @@ requires a plan that includes it.
 
 Every deployment gets a fresh build ID, so the service worker installs new
 caches and removes only its own previous ones. Installed clients check for
-updates on load, when the tab becomes visible, and every 30 minutes; a new
-build reloads the app automatically, without clearing the browser cache. The
-reload waits until an active exam, editor, or import screen is closed so no work
-is interrupted.
+updates on load, when the tab becomes visible, and every 30 minutes; a new build
+reloads the app automatically, without clearing the browser cache. The reload
+waits until an active exam, editor, or import screen is closed and the first-run
+guide is dismissed, so no work is interrupted.
 
 Web data belongs to its origin: exams created on `localhost:5173` do not appear
 on the Pages site. Move them with a backup ZIP.
 
+### Native builds and releases
+
+`.github/workflows/native-builds.yml` builds:
+
+- Linux desktop for x86_64 and arm64 as deb, rpm, and AppImage;
+- Windows x64 as NSIS and MSI;
+- macOS arm64, x86_64, and universal as app and dmg;
+- Android universal plus per-ABI APKs (`arm64-v8a`, `armeabi-v7a`, `x86`,
+  `x86_64`), debug by default or signed release when requested;
+- an unsigned iOS simulator build.
+
+A successful native build is published as a GitHub Release when it was triggered
+by a `v*` tag, or when a manual run enables the signed release build. Tag pushes
+keep the pushed tag; a manual release creates
+`v<version>-build.<run-number>` (for example `v0.1.0-build.42`) on the built
+commit. The release contains the desktop installers, macOS dmg files, and
+Android APKs; macOS app bundles and the iOS simulator build stay as workflow
+artifacts.
+
 ### Android release signing (optional)
 
-The native workflow builds debug APKs by default. To build release APKs
-signed with your own key, add these repository secrets under
+The native workflow builds debug APKs by default. To build release APKs signed
+with your own key, add these repository secrets under
 Settings → Secrets and variables → Actions:
 
 | Secret | Required | Value |
@@ -214,19 +309,12 @@ before uploading `sanjeh-android-universal`, `sanjeh-android-arm64-v8a`,
 `sanjeh-android-armeabi-v7a`, `sanjeh-android-x86`, and
 `sanjeh-android-x86_64`.
 
-A successful native build is published as a GitHub Release when it was
-triggered by a `v*` tag, or when a manual run enables the signed release build.
-Tag pushes keep the pushed tag; a manual release creates
-`v<version>-build.<run-number>` (for example `v0.1.0-build.42`) on the built
-commit. The release contains the desktop installers, macOS dmg files, and
-Android APKs; macOS app bundles and the iOS simulator build stay as workflow
-artifacts.
-
 To sign a local build, initialize the Android project once and point the helper
 at your keystore:
 
 ```bash
 npx tauri android init --ci
+npx tauri icon src-tauri/icon-source/icon.json
 ANDROID_KEYSTORE_PATH=~/.keys/sanjeh-release.jks \
 ANDROID_KEYSTORE_PASSWORD='…' \
 ANDROID_KEY_ALIAS=sanjeh \
@@ -236,14 +324,13 @@ npx tauri android build --apk
 npx tauri android build --apk --split-per-abi
 ```
 
-The second command produces the smaller per-ABI APKs; use the universal APK
-when you need one file that works on every device.
+`scripts/stage-android-apks.mjs` stages the outputs as
+`SANJEH_<version>_android_<kind>_<abi>.apk`; `npm run android:stage` exposes the
+same helper. Never commit the keystore or `keystore.properties`; the generated
+`gen/` tree and keystore files are gitignored. Back up the key: losing it
+prevents updates to an app installed from the signed APK.
 
-Never commit the keystore or `keystore.properties`; the generated `gen/` tree
-and keystore files are gitignored. Back up the key: losing it prevents updates
-to an app installed from the signed APK.
-
-## Project layout
+### Project layout
 
 ```
 src/app          routing, shell, providers, toasts
@@ -260,9 +347,7 @@ public           manifest, service worker, icons, Vazirmatn font
 See [AGENTS.md](AGENTS.md) for invariants, architecture notes, and the
 verification checklist.
 
-## Status
+### Status
 
-Pre-release `0.1.0`. The web, PWA, and Tauri shells share the same UI; desktop
-builds persist through a native local store and the web build through
-IndexedDB. CI covers typecheck, lint, tests, build, and a static smoke test;
-native workflows build desktop, Android, and iOS artifacts.
+Pre-release `0.1.0`. CI covers typecheck, lint, tests, build, and a static smoke
+test; native workflows build desktop, Android, and iOS artifacts.
