@@ -222,6 +222,18 @@
     outline-offset: 2px;
   }
 
+  html {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
   ::selection {
     background: var(--primary);
     color: var(--primary-foreground);

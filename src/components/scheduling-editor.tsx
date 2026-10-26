@@ -42,6 +42,13 @@ const SCHEDULE_MODE_LABELS: Record<Scheduling['mode'], MessageKey> = {
   flexible: 'scheduleFlexible',
 };
 
+const SCHEDULE_MODE_HINTS: Record<Scheduling['mode'], MessageKey> = {
+  immediate: 'scheduleImmediateHint',
+  scheduled: 'scheduleStartHint',
+  window: 'scheduleWindowHint',
+  flexible: 'scheduleFlexibleHint',
+};
+
 export function scheduleIssueKey(code: ScheduleIssueCode): MessageKey {
   switch (code) {
     case 'invalidDuration':
@@ -134,15 +141,16 @@ export function SchedulingEditor({
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {t(SCHEDULE_MODE_HINTS[scheduling.mode])}
+          </p>
         </div>
 
         {scheduling.mode !== 'immediate' && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-start`}>
-                {scheduling.mode === 'scheduled' || scheduling.mode === 'window'
-                  ? t('startsAt')
-                  : t('windowStart')}
+                {scheduling.mode === 'scheduled' ? t('startsAt') : t('windowStart')}
               </Label>
               <DateTimePicker
                 id={`${idPrefix}-start`}
@@ -152,9 +160,7 @@ export function SchedulingEditor({
             </div>
             {scheduling.mode !== 'scheduled' && (
               <div className="flex flex-col gap-2">
-                <Label htmlFor={`${idPrefix}-end`}>
-                  {scheduling.mode === 'window' ? t('endsAt') : t('windowEnd')}
-                </Label>
+                <Label htmlFor={`${idPrefix}-end`}>{t('windowEnd')}</Label>
                 <DateTimePicker
                   id={`${idPrefix}-end`}
                   value={endValue}
