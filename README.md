@@ -171,6 +171,51 @@ is interrupted.
 Web data belongs to its origin: exams created on `localhost:5173` do not appear
 on the Pages site. Move them with a backup ZIP.
 
+### Android release signing (optional)
+
+The native workflow builds a debug APK by default. To build a release APK
+signed with your own key, add these repository secrets under
+Settings → Secrets and variables → Actions:
+
+| Secret | Required | Value |
+| --- | --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | yes | Base64 of your `.jks`, `.keystore`, or `.p12` file |
+| `ANDROID_KEYSTORE_PASSWORD` | yes | Keystore password |
+| `ANDROID_KEY_ALIAS` | yes | Key alias inside the keystore |
+| `ANDROID_KEY_PASSWORD` | no | Key password; defaults to the keystore password |
+
+Create the encoded value with `base64 -w0 sanjeh-release.jks` (PowerShell:
+`[Convert]::ToBase64String([IO.File]::ReadAllBytes("sanjeh-release.jks"))`).
+If you do not have a keystore yet, create one with the JDK:
+
+```bash
+keytool -genkeypair -v -keystore sanjeh-release.jks -alias sanjeh \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+With those secrets, a `v*` tag builds the signed release APK. For a manual run,
+enable **Build a signed release APK instead of the debug APK** in the workflow
+dispatch form. Without the secrets the workflow keeps building the debug APK;
+requesting a release without them fails with a clear error. CI verifies the
+signature with `apksigner` before uploading `sanjeh-android-release`.
+
+To sign a local build, initialize the Android project once and point the helper
+at your keystore:
+
+```bash
+npx tauri android init --ci
+ANDROID_KEYSTORE_PATH=~/.keys/sanjeh-release.jks \
+ANDROID_KEYSTORE_PASSWORD='…' \
+ANDROID_KEY_ALIAS=sanjeh \
+ANDROID_KEY_PASSWORD='…' \
+npm run android:sign
+npx tauri android build --apk
+```
+
+Never commit the keystore or `keystore.properties`; the generated `gen/` tree
+and keystore files are gitignored. Back up the key: losing it prevents updates
+to an app installed from the signed APK.
+
 ## Project layout
 
 ```

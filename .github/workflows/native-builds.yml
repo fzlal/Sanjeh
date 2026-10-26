@@ -2,6 +2,11 @@ name: Native builds
 
 on:
   workflow_dispatch:
+    inputs:
+      android_release:
+        description: Build a signed release APK instead of the debug APK
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -89,7 +94,7 @@ jobs:
   android:
     name: Android — universal APK
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       NDK_VERSION: 27.1.12297006
     steps:
@@ -159,13 +164,82 @@ jobs:
       - name: Generate Android project
         run: npx tauri android init --ci
 
+      - name: Resolve Android release options
+        id: android-signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          requested=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.android_release }}" = "true" ]; then
+            requested=true
+          fi
+          signing=false
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ]; then
+            signing=true
+          fi
+          if [ "${{ github.event_name }}" = "push" ] && [ "$signing" = "true" ]; then
+            requested=true
+          fi
+          if [ "$requested" = "true" ] && [ "$signing" != "true" ]; then
+            echo "::error::Android release requested but signing secrets are incomplete. Set ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS (ANDROID_KEY_PASSWORD is optional)."
+            exit 1
+          fi
+          echo "release=$requested" >> "$GITHUB_OUTPUT"
+          echo "Android release build: $requested (signing secrets present: $signing)"
+
+      - name: Configure Android release signing
+        if: steps.android-signing.outputs.release == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: node scripts/android-signing.mjs --require
+
       - name: Build debug APK (all ABIs)
+        if: steps.android-signing.outputs.release != 'true'
         run: npx tauri android build --apk --debug --ci
 
-      - name: Upload Android artifact
+      - name: Build signed release APK (all ABIs)
+        if: steps.android-signing.outputs.release == 'true'
+        run: npx tauri android build --apk --ci
+
+      - name: Verify release APK signature
+        if: steps.android-signing.outputs.release == 'true'
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found in the Android SDK."
+            exit 1
+          fi
+          found=0
+          while IFS= read -r -d '' APK; do
+            found=1
+            "$APKSIGNER" verify --print-certs "$APK"
+          done < <(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No release APK was produced."
+            exit 1
+          fi
+
+      - name: Upload debug APK
+        if: steps.android-signing.outputs.release != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: sanjeh-android-arm64-armv7-x86_64
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload signed release APK
+        if: steps.android-signing.outputs.release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanjeh-android-release
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           retention-days: 30
           if-no-files-found: error

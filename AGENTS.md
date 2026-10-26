@@ -34,6 +34,7 @@ npm test               # Vitest (node environment)
 npm run build          # typecheck + production bundle in dist/
 npm run build:pages    # production bundle for GitHub Pages (relative base)
 npm run tauri build    # native desktop bundle (requires Rust toolchain)
+npm run android:sign   # configure optional Android release signing after init
 ```
 
 Always run `typecheck`, `lint`, `test`, and `build` before calling work done.
@@ -299,9 +300,20 @@ Do not fork this layout; extend the component instead.
   worker takes control (never on first install). `holdAutoUpdate()` in
   `App.tsx` defers that reload during onboarding, exams, and the editor/import
   screens; keep new critical flows inside that guard.
+- Android release signing is optional. The workflow builds a debug APK by
+  default; it builds a signed release APK when the manual release input is on,
+  or on a `v*` tag when the signing secrets are present.
+  `scripts/android-signing.mjs` reads `ANDROID_KEYSTORE_BASE64` (or
+  `ANDROID_KEYSTORE_PATH`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  and the optional `ANDROID_KEY_PASSWORD`, writes the generated
+  `gen/android/keystore.properties`, and patches the generated
+  `app/build.gradle.kts`. Never commit a keystore or signing properties; the
+  `gen/` tree and keystore files are ignored. Keep the `apksigner` verification
+  step and both artifact upload branches.
 - `.github/workflows/native-builds.yml`: Tauri desktop (Linux x64/arm64 as
   deb + rpm + AppImage, Windows x64 as NSIS + MSI, macOS universal as app +
-  dmg), Android debug APK, iOS simulator, on tags.
+  dmg), Android debug APK (or a signed release APK when requested), iOS
+  simulator, on tags.
 - `.github/workflows/release.yml`: publishes verified native artifacts.
 - Keep the repository lightweight: no `node_modules`, `dist`, `target`, SDKs,
   or binaries committed.
