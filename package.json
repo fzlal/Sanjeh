@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "lint": "oxlint",
     "android:sign": "node scripts/android-signing.mjs",
+    "android:stage": "node scripts/stage-android-apks.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

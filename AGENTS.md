@@ -35,6 +35,7 @@ npm run build          # typecheck + production bundle in dist/
 npm run build:pages    # production bundle for GitHub Pages (relative base)
 npm run tauri build    # native desktop bundle (requires Rust toolchain)
 npm run android:sign   # configure optional Android release signing after init
+npm run android:stage  # stage built APKs as universal or per-ABI artifacts
 ```
 
 Always run `typecheck`, `lint`, `test`, and `build` before calling work done.
@@ -300,8 +301,8 @@ Do not fork this layout; extend the component instead.
   worker takes control (never on first install). `holdAutoUpdate()` in
   `App.tsx` defers that reload during onboarding, exams, and the editor/import
   screens; keep new critical flows inside that guard.
-- Android release signing is optional. The workflow builds a debug APK by
-  default; it builds a signed release APK when the manual release input is on,
+- Android release signing is optional. The workflow builds debug APKs by
+  default; it builds signed release APKs when the manual release input is on,
   or on a `v*` tag when the signing secrets are present.
   `scripts/android-signing.mjs` reads `ANDROID_KEYSTORE_BASE64` (or
   `ANDROID_KEYSTORE_PATH`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
@@ -309,12 +310,19 @@ Do not fork this layout; extend the component instead.
   `gen/android/keystore.properties`, and patches the generated
   `app/build.gradle.kts`. Never commit a keystore or signing properties; the
   `gen/` tree and keystore files are ignored. Keep the `apksigner` verification
-  step and both artifact upload branches.
+  step and the universal plus four per-ABI uploads.
+- Android builds run twice: once universal and once with `--split-per-abi`.
+  `scripts/stage-android-apks.mjs` classifies the outputs into
+  `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64` so each can be uploaded as a
+  separate artifact. Keep all four ABIs; do not replace the per-ABI APKs with
+  only the universal one.
 - `.github/workflows/native-builds.yml`: Tauri desktop (Linux x64/arm64 as
-  deb + rpm + AppImage, Windows x64 as NSIS + MSI, macOS universal as app +
-  dmg), Android debug APK (or a signed release APK when requested), iOS
-  simulator, on tags.
-- `.github/workflows/release.yml`: publishes verified native artifacts.
+  deb + rpm + AppImage, Windows x64 as NSIS + MSI, macOS universal plus arm64
+  and x64 as app + dmg), Android universal plus per-ABI APKs (debug, or a
+  signed release when requested), and iOS simulator. Its final `release` job
+  publishes a GitHub Release for `v*` tags and for manual signed release runs;
+  manual tags use `v<version>-build.<run-number>`. Attach installers only, not
+  raw `.app` bundles.
 - Keep the repository lightweight: no `node_modules`, `dist`, `target`, SDKs,
   or binaries committed.
 

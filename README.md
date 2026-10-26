@@ -60,9 +60,10 @@ external AI calls.
   sheet with the selected options and no score.
 - **Offline and local.** The desktop build persists to a native Tauri store in
   the app data folder; the web build uses IndexedDB with a persistent-storage
-  request. PWA install and Tauri builds for Linux (deb, rpm, AppImage), Windows
-  (NSIS, MSI), macOS (app, dmg), Android (APK), and iOS are supported; native
-  artifacts are produced in CI.
+  request. PWA install and Tauri builds for Linux (deb, rpm, AppImage for
+  x86_64 and arm64), Windows (NSIS, MSI for x86_64), macOS (app and dmg for
+  arm64, x86_64, and universal), Android (universal and per-ABI APKs), and iOS
+  are supported; native artifacts are produced in CI.
 - **Two languages, eighteen palettes.** Persian (RTL, default) and English
   (LTR), each palette with light and dark tokens. Displayed dates and times use
   the language's calendar: Jalali for Persian, Gregorian for English.
@@ -173,7 +174,7 @@ on the Pages site. Move them with a backup ZIP.
 
 ### Android release signing (optional)
 
-The native workflow builds a debug APK by default. To build a release APK
+The native workflow builds debug APKs by default. To build release APKs
 signed with your own key, add these repository secrets under
 Settings → Secrets and variables → Actions:
 
@@ -193,11 +194,23 @@ keytool -genkeypair -v -keystore sanjeh-release.jks -alias sanjeh \
   -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-With those secrets, a `v*` tag builds the signed release APK. For a manual run,
-enable **Build a signed release APK instead of the debug APK** in the workflow
-dispatch form. Without the secrets the workflow keeps building the debug APK;
-requesting a release without them fails with a clear error. CI verifies the
-signature with `apksigner` before uploading `sanjeh-android-release`.
+With those secrets, a `v*` tag builds the signed release APKs. For a manual run,
+enable **Build signed release APKs and publish a GitHub release** in the
+workflow dispatch form. Without the secrets the workflow keeps building the
+debug APK; requesting a release without them fails with a clear error. Every
+Android build produces a universal APK plus separate arm64-v8a, armeabi-v7a,
+x86, and x86_64 APKs. CI checks every signed release APK with `apksigner`
+before uploading `sanjeh-android-universal`, `sanjeh-android-arm64-v8a`,
+`sanjeh-android-armeabi-v7a`, `sanjeh-android-x86`, and
+`sanjeh-android-x86_64`.
+
+A successful native build is published as a GitHub Release when it was
+triggered by a `v*` tag, or when a manual run enables the signed release build.
+Tag pushes keep the pushed tag; a manual release creates
+`v<version>-build.<run-number>` (for example `v0.1.0-build.42`) on the built
+commit. The release contains the desktop installers, macOS dmg files, and
+Android APKs; macOS app bundles and the iOS simulator build stay as workflow
+artifacts.
 
 To sign a local build, initialize the Android project once and point the helper
 at your keystore:
@@ -210,7 +223,11 @@ ANDROID_KEY_ALIAS=sanjeh \
 ANDROID_KEY_PASSWORD='…' \
 npm run android:sign
 npx tauri android build --apk
+npx tauri android build --apk --split-per-abi
 ```
+
+The second command produces the smaller per-ABI APKs; use the universal APK
+when you need one file that works on every device.
 
 Never commit the keystore or `keystore.properties`; the generated `gen/` tree
 and keystore files are gitignored. Back up the key: losing it prevents updates

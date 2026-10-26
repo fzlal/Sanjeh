@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       android_release:
-        description: Build a signed release APK instead of the debug APK
+        description: Build signed release APKs and publish a GitHub release
         type: boolean
         default: false
   push:
@@ -34,18 +34,32 @@ jobs:
             arch: x86_64
             runner: ubuntu-22.04
             args: --bundles deb,rpm,appimage
+            bundle_dir: src-tauri/target/release/bundle
           - platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
             args: --bundles deb,rpm,appimage
+            bundle_dir: src-tauri/target/release/bundle
           - platform: windows
             arch: x86_64
             runner: windows-latest
             args: --bundles nsis,msi
+            bundle_dir: src-tauri/target/release/bundle
+          - platform: macos
+            arch: arm64
+            runner: macos-latest
+            args: --target aarch64-apple-darwin --bundles app,dmg
+            bundle_dir: src-tauri/target/aarch64-apple-darwin/release/bundle
+          - platform: macos
+            arch: x86_64
+            runner: macos-latest
+            args: --target x86_64-apple-darwin --bundles app,dmg
+            bundle_dir: src-tauri/target/x86_64-apple-darwin/release/bundle
           - platform: macos
             arch: universal
             runner: macos-latest
             args: --target universal-apple-darwin --bundles app,dmg
+            bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,7 +79,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Add macOS universal targets
+      - name: Add macOS build targets
         if: matrix.platform == 'macos'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
@@ -85,16 +99,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sanjeh-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            src-tauri/target/release/bundle/**/*
-            src-tauri/target/universal-apple-darwin/release/bundle/**/*
+          path: ${{ matrix.bundle_dir }}/**/*
           retention-days: 30
           if-no-files-found: error
 
   android:
-    name: Android — universal APK
+    name: Android — universal and per-ABI APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       NDK_VERSION: 27.1.12297006
     steps:
@@ -199,15 +211,27 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: node scripts/android-signing.mjs --require
 
-      - name: Build debug APK (all ABIs)
-        if: steps.android-signing.outputs.release != 'true'
-        run: npx tauri android build --apk --debug --ci
+      - name: Build universal and per-ABI APKs
+        env:
+          ANDROID_RELEASE: ${{ steps.android-signing.outputs.release }}
+        run: |
+          set -euo pipefail
+          build_kind=release
+          flags=()
+          if [ "$ANDROID_RELEASE" != "true" ]; then
+            build_kind=debug
+            flags+=(--debug)
+          fi
+          rm -rf src-tauri/gen/android/app/build/outputs/apk artifacts
+          echo "Building the $build_kind universal APK..."
+          npx tauri android build --apk "${flags[@]}" --ci
+          node scripts/stage-android-apks.mjs universal artifacts/android-universal "$build_kind"
+          rm -rf src-tauri/gen/android/app/build/outputs/apk
+          echo "Building the $build_kind per-ABI APKs..."
+          npx tauri android build --apk "${flags[@]}" --split-per-abi --ci
+          node scripts/stage-android-apks.mjs split artifacts/android-split "$build_kind"
 
-      - name: Build signed release APK (all ABIs)
-        if: steps.android-signing.outputs.release == 'true'
-        run: npx tauri android build --apk --ci
-
-      - name: Verify release APK signature
+      - name: Verify release APK signatures
         if: steps.android-signing.outputs.release == 'true'
         run: |
           set -euo pipefail
@@ -216,31 +240,54 @@ jobs:
             echo "::error::apksigner was not found in the Android SDK."
             exit 1
           fi
-          found=0
+          count=0
           while IFS= read -r -d '' APK; do
-            found=1
             "$APKSIGNER" verify --print-certs "$APK"
-          done < <(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' -print0)
-          if [ "$found" -eq 0 ]; then
+            count=$((count + 1))
+          done < <(find artifacts/android-universal artifacts/android-split -type f -name '*.apk' -print0)
+          if [ "$count" -eq 0 ]; then
             echo "::error::No release APK was produced."
             exit 1
           fi
+          echo "Verified $count signed APKs."
 
-      - name: Upload debug APK
-        if: steps.android-signing.outputs.release != 'true'
+      - name: Upload universal APK
         uses: actions/upload-artifact@v4
         with:
-          name: sanjeh-android-arm64-armv7-x86_64
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          name: sanjeh-android-universal
+          path: artifacts/android-universal/*.apk
           retention-days: 30
           if-no-files-found: error
 
-      - name: Upload signed release APK
-        if: steps.android-signing.outputs.release == 'true'
+      - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: sanjeh-android-release
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          name: sanjeh-android-arm64-v8a
+          path: artifacts/android-split/arm64-v8a/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanjeh-android-armeabi-v7a
+          path: artifacts/android-split/armeabi-v7a/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload x86 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanjeh-android-x86
+          path: artifacts/android-split/x86/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanjeh-android-x86_64
+          path: artifacts/android-split/x86_64/*.apk
           retention-days: 30
           if-no-files-found: error
 
@@ -287,3 +334,56 @@ jobs:
             src-tauri/gen/apple/build/**/*.ipa
           retention-days: 30
           if-no-files-found: warn
+
+  release:
+    name: Publish GitHub release
+    needs: [desktop, android, ios]
+    if: >-
+      needs.desktop.result == 'success' &&
+      needs.android.result == 'success' &&
+      needs.ios.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.android_release == 'true'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: release-tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${{ github.ref_name }}"
+          else
+            version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+            tag="v${version}-build.${{ github.run_number }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Publishing $tag"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release-tag.outputs.tag }}
+          name: SANJEH ${{ steps.release-tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: ${{ github.event_name == 'push' }}
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/**/*.apk
+            release-assets/**/*.deb
+            release-assets/**/*.rpm
+            release-assets/**/*.AppImage
+            release-assets/**/*.msi
+            release-assets/**/*.exe
+            release-assets/**/*.dmg
