@@ -151,6 +151,16 @@ npm run tauri dev   # native shell
 Node 20+ is required (CI uses Node 24). Native builds need the Rust toolchain
 and the platform prerequisites from the Tauri 2 documentation.
 
+### Icons
+
+All app icons are generated from `src-tauri/icon-source/icon.json`: the full
+brand icon, a transparent Android foreground, a monochrome layer, and the
+`#232019` adaptive background. Run `npm run icons` and commit the regenerated
+`src-tauri/icons` files after changing any artwork. The native workflow runs the
+same command after `tauri android init` and `tauri ios init`, because those
+commands install the Tauri template icons; run it yourself after initializing a
+mobile project locally.
+
 ### GitHub Pages
 
 `npm run build:pages` builds the same app with a relative Vite base, so it runs

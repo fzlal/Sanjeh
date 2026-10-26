@@ -176,6 +176,9 @@ jobs:
       - name: Generate Android project
         run: npx tauri android init --ci
 
+      - name: Generate app icons
+        run: npx tauri icon src-tauri/icon-source/icon.json
+
       - name: Resolve Android release options
         id: android-signing
         env:
@@ -321,6 +324,9 @@ jobs:
 
       - name: Generate iOS project
         run: npx tauri ios init --ci
+
+      - name: Generate app icons
+        run: npx tauri icon src-tauri/icon-source/icon.json
 
       - name: Build simulator app (unsigned)
         run: npx tauri ios build --debug --target aarch64-sim

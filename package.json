@@ -18,6 +18,7 @@
     "lint": "oxlint",
     "android:sign": "node scripts/android-signing.mjs",
     "android:stage": "node scripts/stage-android-apks.mjs",
+    "icons": "tauri icon src-tauri/icon-source/icon.json",
     "tauri": "tauri"
   },
   "dependencies": {

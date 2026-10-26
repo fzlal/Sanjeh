@@ -8,6 +8,10 @@ dist/
 dist-ssr/
 *.local
 
+# icon generator fallback when mobile projects are not initialized
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
 # native build products and caches
 src-tauri/target/
 src-tauri/gen/

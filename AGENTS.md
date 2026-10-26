@@ -36,6 +36,7 @@ npm run build:pages    # production bundle for GitHub Pages (relative base)
 npm run tauri build    # native desktop bundle (requires Rust toolchain)
 npm run android:sign   # configure optional Android release signing after init
 npm run android:stage  # stage built APKs as universal or per-ABI artifacts
+npm run icons          # regenerate every platform icon from icon-source/icon.json
 ```
 
 Always run `typecheck`, `lint`, `test`, and `build` before calling work done.
@@ -323,6 +324,13 @@ Do not fork this layout; extend the component instead.
   publishes a GitHub Release for `v*` tags and for manual signed release runs;
   manual tags use `v<version>-build.<run-number>`. Attach installers only, not
   raw `.app` bundles.
+- Icons come from `src-tauri/icon-source/icon.json`; run `npm run icons` and
+  commit `src-tauri/icons` after changing artwork. The native workflow re-runs
+  the generator after `tauri android init` and `tauri ios init` because those
+  commands write the default Tauri icons into the generated projects. Keep the
+  manifest's Android background, foreground, and monochrome layers and the
+  `bg_color`; a plain raster source produces a white adaptive background and an
+  unframed iOS icon.
 - Keep the repository lightweight: no `node_modules`, `dist`, `target`, SDKs,
   or binaries committed.
 
