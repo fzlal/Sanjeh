@@ -136,6 +136,8 @@ export interface Settings {
   theme: string;
   appearance: AppearanceMode;
   onboardingComplete: boolean;
+  /** The feature guide is shown once automatically, then only on demand. */
+  guideSeen: boolean;
 }
 
 /** A validated, in-memory backup whose PDFs are native Blobs. */

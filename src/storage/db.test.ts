@@ -23,6 +23,7 @@ const settings: Settings = {
   theme: 'paper',
   appearance: 'light',
   onboardingComplete: true,
+  guideSeen: true,
 };
 
 beforeEach(async () => {

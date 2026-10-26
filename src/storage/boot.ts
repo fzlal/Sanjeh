@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: DEFAULT_THEME,
   appearance: 'light',
   onboardingComplete: false,
+  guideSeen: false,
 };
 
 /** Synchronous mirror of settings so the first paint has the right theme and direction. */
@@ -35,6 +36,8 @@ export function readBootSettings(): Settings {
         typeof record.onboardingComplete === 'boolean'
           ? record.onboardingComplete
           : DEFAULT_SETTINGS.onboardingComplete,
+      guideSeen:
+        typeof record.guideSeen === 'boolean' ? record.guideSeen : DEFAULT_SETTINGS.guideSeen,
     };
   } catch {
     return DEFAULT_SETTINGS;

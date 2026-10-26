@@ -560,6 +560,8 @@ export function asSettings(value: unknown, path = 'settings'): Settings {
     theme: record.theme,
     appearance: record.appearance,
     onboardingComplete: asBoolean(record.onboardingComplete, `${path}.onboardingComplete`),
+    // Backups written before the guide existed have no flag; show it once.
+    guideSeen: typeof record.guideSeen === 'boolean' ? record.guideSeen : false,
   };
 }
 

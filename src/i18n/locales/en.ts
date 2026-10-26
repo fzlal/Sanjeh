@@ -49,6 +49,86 @@ export const en = {
   stepOf: 'Step {current} of {total}',
   appearanceHint: 'Follow your device or choose a fixed appearance.',
 
+  guideOpen: 'App guide',
+  guideTitle: 'SANJEH guide',
+  guideIntro: 'A short tour of everything SANJEH can do.',
+  guideAboutHint: 'From creating an exam to reading the report card.',
+  guideChipLocal: 'On this device',
+  guideChipOffline: 'Offline',
+  guideChipNoAccount: 'No account',
+  guideWelcomeTitle: 'Welcome to SANJEH',
+  guideWelcomeBody:
+    'This guide walks through the whole app in a few short steps: create an exam, choose its answer key, schedule it, run the session, and read the report card. Skip it whenever you like.',
+  guideWelcomePoint1: 'Everything stays on this device: no account, server, or tracking.',
+  guideWelcomePoint2: 'Exams and PDFs are never uploaded.',
+  guideWelcomePoint3: 'After the first visit, the app also works offline.',
+  guideDashboardTitle: 'Your exam dashboard',
+  guideDashboardBody: 'The home screen is where you manage exams and check recent results.',
+  guideDashboardPoint1:
+    'Each card shows its status: available, scheduled, in progress, or ended.',
+  guideDashboardPoint2: 'Start opens a new session; Resume returns to an unfinished attempt.',
+  guideDashboardPoint3:
+    'Edit, duplicate, and delete live on the card. Search appears once you have several exams.',
+  guideCreateTitle: 'Split the exam into booklets',
+  guideCreateBody:
+    'In New exam, add a title and notes, then divide the questions into one or more booklets.',
+  guideCreatePoint1:
+    'Each booklet has its own question count and time limit; zero means no time limit.',
+  guideCreatePoint2:
+    'Booklet PDFs are optional, stay on this device, and can be downloaded during the session.',
+  guideCreatePoint3:
+    'Together the booklets must cover every question, in the same order as the answer sheet.',
+  guideKeysTitle: 'Choose an answer-key mode',
+  guideKeysBody:
+    'Pick one of three key modes when you create the exam; it stays fixed afterwards.',
+  guideKeysPoint1:
+    'AI: copy the ready-made prompt, give it to an external AI service with the answer PDF, then paste the QZ1 line. SANJEH never reads the PDF itself.',
+  guideKeysPoint2:
+    'Manual: set the correct option for each question yourself. Best for small exams or when there is no answer PDF.',
+  guideKeysPoint3: 'No key: after the exam only the selected options are shown, with no score.',
+  guideKeysPoint4:
+    'In a key, “?” means unresolved and “-” means excluded. You can fix both in the key editor.',
+  guideScoringTitle: 'Transparent scoring',
+  guideScoringBody:
+    'A correct answer earns 3 points and a wrong answer deducts 1, so the final percentage can be negative.',
+  guideScoringPoint1:
+    'Students choose one option per question. If a key lists several correct options, choosing any one of them counts as correct.',
+  guideScoringPoint2: 'Excluded and unresolved questions are left out of the calculation.',
+  guideScoringPoint3: 'The percentage is based on scorable questions, not on the total.',
+  guideScheduleTitle: 'Schedule availability',
+  guideScheduleBody:
+    'Choose one of four availability modes. All times use the local timezone of this device.',
+  guideSchedulePoint1:
+    'No schedule is always available; Start from a set date opens at that moment; Fixed time window is available only inside the window.',
+  guideSchedulePoint2: 'With Flexible start in a window, the student chooses when to begin.',
+  guideSchedulePoint3:
+    'Each booklet has its own timer; when time runs out the next booklet starts automatically without carrying time over, and the window end is the hard stop.',
+  guideSessionTitle: 'During the exam',
+  guideSessionBody:
+    'Fill the answer sheet on this device; every choice saves automatically. The current booklet PDF can be downloaded from the top bar.',
+  guideSessionPoint1:
+    'Only the current booklet is unlocked; rows from earlier and later booklets stay locked.',
+  guideSessionPoint2:
+    'Finish booklet moves on early. Leftover time is discarded and the next booklet starts with its full time.',
+  guideSessionPoint3:
+    'Leaving keeps the clock running; resume from the dashboard. Submit finalizes the result.',
+  guideResultsTitle: 'Report card and review',
+  guideResultsBody:
+    'After submission you see the percentage and counts for correct, incorrect, unanswered, and excluded.',
+  guideResultsPoint1:
+    'The review sheet colors your choices and the correct options; the answer PDF is downloadable too.',
+  guideResultsPoint2:
+    'If a key was wrong, fix it under Correct the answer key. The score is recalculated immediately.',
+  guideResultsPoint3: 'Recent results remain available from the dashboard.',
+  guideSettingsTitle: 'Settings, backup, and help',
+  guideSettingsBody: 'Use Settings to change the look and language and to keep your data safe.',
+  guideSettingsPoint1:
+    'Persian or English, themes, and light, dark, or system appearance apply immediately.',
+  guideSettingsPoint2:
+    'The ZIP backup contains exams, results, preferences, and PDFs. Delete all data cannot be undone.',
+  guideSettingsPoint3:
+    'Reopen this guide from the question-mark button in the header. For offline use, install the app or add it to your home screen.',
+
   newExam: 'New exam',
   yourExams: 'Your exams',
   emptyExamsTitle: 'No exams yet',

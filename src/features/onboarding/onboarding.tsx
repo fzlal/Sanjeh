@@ -12,12 +12,13 @@ export function Onboarding() {
   const { t } = useI18n();
   const { settings, updateSettings } = useSettings();
   const finish = () => updateSettings({ onboardingComplete: true });
+  const skipAll = () => updateSettings({ onboardingComplete: true, guideSeen: true });
 
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="page-container flex h-16 items-center justify-between">
         <Brand />
-        <Button variant="ghost" size="sm" onClick={finish}>
+        <Button variant="ghost" size="sm" onClick={skipAll}>
           {t('skip')}
         </Button>
       </header>

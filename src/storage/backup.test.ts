@@ -19,6 +19,7 @@ const settings: Settings = {
   theme: 'paper',
   appearance: 'light',
   onboardingComplete: true,
+  guideSeen: true,
 };
 
 interface RawPdf {
@@ -619,6 +620,13 @@ describe('backup validation', () => {
     await expect(
       validateBackup(appearance.manifest, { files: appearance.entries }),
     ).rejects.toThrow(/appearance/);
+  });
+
+  it('accepts settings from before the guide flag existed', async () => {
+    const backup = await zipBackup();
+    delete (backup.manifest.data.settings as Partial<Settings>).guideSeen;
+    const parsed = await validateBackup(backup.manifest, { files: backup.entries });
+    expect(parsed.data.settings.guideSeen).toBe(false);
   });
 
   it('rejects impossible scheduling ranges', async () => {

@@ -6,6 +6,7 @@ import { useToast } from './toast';
 import { Splash } from './splash';
 import { AppShell } from './shell';
 import { Onboarding } from '@/features/onboarding/onboarding';
+import { GuideDialog } from '@/features/onboarding/guide';
 import { Dashboard } from '@/features/dashboard/dashboard';
 import { ExamEditor } from '@/features/editor/exam-editor';
 import { ExamImport } from '@/features/import/exam-import';
@@ -35,14 +36,29 @@ type Route =
 export function App() {
   const { t } = useI18n();
   const { notify } = useToast();
-  const { settings, ready, storageFailed, reloadSettings } = useSettings();
+  const { settings, ready, storageFailed, reloadSettings, updateSettings } = useSettings();
   const { exams, sessions, loading, error, refresh } = useAppData(ready);
   const [route, setRoute] = useState<Route>({ name: 'dashboard' });
   const [lastSubmitted, setLastSubmitted] = useState<ExamSession | undefined>();
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     void requestPersistentStorage();
   }, []);
+
+  const autoGuide =
+    ready &&
+    settings.onboardingComplete &&
+    !settings.guideSeen &&
+    route.name === 'dashboard';
+
+  const changeGuideOpen = useCallback(
+    (open: boolean) => {
+      setGuideOpen(open);
+      if (!open && !settings.guideSeen) updateSettings({ guideSeen: true });
+    },
+    [settings.guideSeen, updateSettings],
+  );
 
   const goDashboard = useCallback(() => setRoute({ name: 'dashboard' }), []);
   const goSettings = useCallback(() => setRoute({ name: 'settings' }), []);
@@ -193,6 +209,7 @@ export function App() {
       }
       onHome={goDashboard}
       onSettings={goSettings}
+      onGuide={() => setGuideOpen(true)}
       alert={alert}
     >
       <div
@@ -219,6 +236,7 @@ export function App() {
           exams={exams}
           sessions={sessions}
           onBack={goDashboard}
+          onOpenGuide={() => setGuideOpen(true)}
           onDataReplaced={() => {
             void reloadSettings();
             void refresh();
@@ -266,6 +284,7 @@ export function App() {
           );
         })()}
       </div>
+      <GuideDialog open={guideOpen || autoGuide} onOpenChange={changeGuideOpen} />
     </AppShell>
   );
 }

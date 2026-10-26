@@ -80,7 +80,7 @@ src/
   app/            shell, routing state, data loading, toasts, settings provider
   components/     shared UI primitives (ui/) and the answer-sheet component
   features/
-    onboarding/   first-run setup
+    onboarding/   first-run setup + the skippable feature guide
     dashboard/    exam list and recent results
     import/       new-exam flow (booklets + optional PDFs + answer-key mode + scheduling),
                   key dialog, prompt copy
@@ -113,6 +113,9 @@ src/
   only when a download is requested.
 - `Question.key`: `known` (1–4 correct indices), `unresolved` (`?`), or
   `excluded` (`-`).
+- `Settings.guideSeen`: the feature guide opens once after onboarding; the
+  header help button and Settings reopen it. Backups without the flag default
+  to unseen.
 
 ### Booklets and timing
 

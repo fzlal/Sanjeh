@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpenCheck,
   Download,
   HardDriveDownload,
   Info,
@@ -42,11 +43,13 @@ export function SettingsScreen({
   exams,
   sessions,
   onDataReplaced,
+  onOpenGuide,
   onBack,
 }: {
   exams: Exam[];
   sessions: ExamSession[];
   onDataReplaced: () => void;
+  onOpenGuide: () => void;
   onBack: () => void;
 }) {
   const { t, dir } = useI18n();
@@ -195,12 +198,29 @@ export function SettingsScreen({
 
         <Card>
           <CardHeader>
+            <CardTitle>{t('guideTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+              {t('guideAboutHint')}
+            </p>
+            <Button variant="outline" onClick={onOpenGuide}>
+              <BookOpenCheck className="size-4" aria-hidden="true" />
+              {t('guideOpen')}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>{t('dangerZone')}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              onClick={() => updateSettings({ onboardingComplete: false })}
+              onClick={() =>
+                updateSettings({ onboardingComplete: false, guideSeen: false })
+              }
             >
               <RotateCcw className="size-4" aria-hidden="true" />
               {t('resetOnboarding')}
