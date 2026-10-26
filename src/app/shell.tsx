@@ -20,8 +20,8 @@ export function AppShell({
   const { t } = useI18n();
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-background">
-        <div className="page-container flex h-16 items-center justify-between gap-3">
+      <header className="glass-bar sticky top-0 z-30 border-b">
+        <div className="page-container flex h-14 items-center justify-between gap-3">
           <button
             type="button"
             onClick={onHome}
@@ -31,13 +31,6 @@ export function AppShell({
             <Brand />
           </button>
           <nav className="flex items-center gap-1">
-            <Button
-              variant={current === 'dashboard' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={onHome}
-            >
-              {t('yourExams')}
-            </Button>
             <Button
               variant={current === 'settings' ? 'secondary' : 'ghost'}
               size="icon-sm"

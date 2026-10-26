@@ -148,25 +148,16 @@ export function ImportDialog({
           </div>
           <div className="flex items-start gap-2 rounded-md border border-unanswered-border bg-unanswered-bg px-3 py-2 text-[11px] leading-relaxed text-unanswered">
             <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            <span>{t('promptNote')}</span>
+            <span>{t('aiFallibleNote')}</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="flex items-start gap-2 rounded-md border border-correct-border bg-correct-bg px-3 py-2 text-[11px] leading-relaxed text-correct">
-              <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              <span>{t('aiAccuracyNote')}</span>
-            </div>
-            <div className="flex items-start gap-2 rounded-md border border-unanswered-border bg-unanswered-bg px-3 py-2 text-[11px] leading-relaxed text-unanswered">
-              <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              <span>{t('aiFallibleNote')}</span>
-            </div>
+          <div className="flex items-start gap-2 rounded-md border border-correct-border bg-correct-bg px-3 py-2 text-[11px] leading-relaxed text-correct">
+            <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>{t('aiAccuracyNote')}</span>
           </div>
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm font-medium">{t('keyFileLabel')}</span>
-            <span className="text-[11px] text-muted-foreground">{t('keyFileHint')}</span>
-          </div>
+          <span className="text-sm font-medium">{t('keyFileLabel')}</span>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
@@ -196,10 +187,6 @@ export function ImportDialog({
               }}
             />
           </div>
-          <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <ShieldAlert className="size-3 shrink-0" aria-hidden="true" />
-            {t('filesLocalNote')}
-          </span>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -223,7 +210,6 @@ export function ImportDialog({
             className="font-mono text-xs"
             spellCheck={false}
           />
-          <span className="text-[11px] text-muted-foreground">{t('pasteHint')}</span>
         </div>
 
         {error && (
@@ -268,9 +254,6 @@ export function ImportDialog({
               </div>
             )}
             <div className="rounded-lg border border-border">
-              <p className="border-b border-border bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                {t('keyEditorHint')}
-              </p>
               <div className="max-h-56 overflow-y-auto">
                 <AnswerKeyEditor
                   items={parsed.map((token, index) => ({ id: String(index), key: token }))}

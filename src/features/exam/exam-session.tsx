@@ -187,10 +187,13 @@ export function ExamSessionScreen({
     session?.bookletEndsAt != null ? Math.max(0, session.bookletEndsAt - now) : null;
   const critical = remaining !== null && remaining <= 60_000;
   const low = remaining !== null && remaining <= 5 * 60_000;
-  const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
 
   const currentBooklet = session?.exam.booklets[session.bookletIndex];
   const currentRange = session ? currentBookletRange(session) : undefined;
+  const bookletProgress =
+    currentRange && currentRange.count > 0
+      ? Math.round((answeredHere / currentRange.count) * 100)
+      : 0;
   const bookletTotal = session?.exam.booklets.length ?? 0;
   const lastBooklet = session ? isLastBooklet(session) : false;
   const currentPdfs =
@@ -261,8 +264,8 @@ export function ExamSessionScreen({
   const bookletTitle = currentBooklet?.title || t('bookletN', { n: bookletNumber });
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-background">
+    <div className="flex min-h-dvh flex-col">
+      <header className="glass-bar sticky top-0 z-30 border-b">
         <div className="page-container flex min-h-14 items-center justify-between gap-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <Button
@@ -288,13 +291,15 @@ export function ExamSessionScreen({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <PdfDownloadButton
-              pdfs={currentPdfs}
-              label={t('downloadExamPdf')}
-              variant="outline"
-              size="sm"
-              compactOnMobile
-            />
+            {currentPdfs.length > 0 && (
+              <PdfDownloadButton
+                pdfs={currentPdfs}
+                label={t('downloadExamPdf')}
+                variant="outline"
+                size="sm"
+                compactOnMobile
+              />
+            )}
             {remaining !== null ? (
               <div
                 role="timer"
@@ -319,65 +324,45 @@ export function ExamSessionScreen({
       </header>
 
       <main className="page-container animate-fade-up flex flex-1 flex-col gap-4 py-5 sm:py-7">
-        <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{bookletTitle}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {t('currentBooklet', {
-                current: formatNumber(bookletNumber, locale),
-                total: formatNumber(bookletTotal, locale),
-              })}
-              {currentRange && currentRange.count > 0
-                ? ` · ${t('bookletRange', {
-                    from: formatNumber(currentRange.startQuestion, locale),
-                    to: formatNumber(currentRange.endQuestion, locale),
-                  })}`
-                : ''}
-            </p>
-          </div>
-          <span className="text-[11px] text-muted-foreground">
-            {t('answered')}{' '}
-            <span className="tnum">
-              {formatNumber(answeredHere, locale)} /{' '}
-              {formatNumber(currentRange?.count ?? 0, locale)}
-            </span>
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">
-              {t('questionCount')}{' '}
-              <span className="tnum">{formatNumber(total, locale)}</span>
-            </span>
+        <div className="glass flex flex-col gap-3 rounded-2xl px-4 py-3.5 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{bookletTitle}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t('currentBooklet', {
+                  current: formatNumber(bookletNumber, locale),
+                  total: formatNumber(bookletTotal, locale),
+                })}
+                {currentRange && currentRange.count > 0
+                  ? ` · ${t('bookletRange', {
+                      from: formatNumber(currentRange.startQuestion, locale),
+                      to: formatNumber(currentRange.endQuestion, locale),
+                    })}`
+                  : ''}
+              </p>
+            </div>
             <span className="text-xs text-muted-foreground">
               {t('answered')}{' '}
-              <span className="tnum">{formatNumber(answered, locale)}</span>
+              <span className="tnum">
+                {formatNumber(answeredHere, locale)} /{' '}
+                {formatNumber(currentRange?.count ?? 0, locale)}
+              </span>
             </span>
           </div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-secondary/80">
             <div
               className="h-full rounded-full bg-primary transition-[width] duration-200"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${bookletProgress}%` }}
             />
           </div>
         </div>
 
         <AnswerSheet rows={rows} variant="answering" onToggle={toggle} />
-
-        <div className="mx-auto flex max-w-2xl flex-col gap-1 text-center">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {t('bookletLockedHint')}
-          </p>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {t('bookletAutoAdvanceNote')}
-          </p>
-        </div>
       </main>
 
-      <footer className="sticky bottom-0 z-30 border-t border-border bg-surface">
+      <footer className="glass-bar sticky bottom-0 z-30 border-t">
         <div className="page-container flex flex-wrap items-center justify-between gap-2 py-3">
-          <span className="hidden text-xs text-muted-foreground sm:inline">
+          <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
             {t('answered')}{' '}
             <span className="tnum">
               {formatNumber(answered, locale)} / {formatNumber(total, locale)}

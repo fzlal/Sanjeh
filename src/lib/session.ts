@@ -1,7 +1,7 @@
 import type { Booklet, BookletSnapshot, Exam, ExamSession, ExamSnapshot, OptionIndex } from '@/types';
 import { bookletRanges, type BookletRange, isQuestionInBooklet } from './booklets';
 import { createId } from './id';
-import { normalizeSelection } from './scoring';
+import { normalizeSelection, scoreExam } from './scoring';
 import { computeBookletDeadline, getScheduleBounds } from './scheduling';
 
 function snapshotBooklets(booklets: Booklet[]): BookletSnapshot[] {
@@ -18,6 +18,7 @@ function snapshotExam(exam: Exam): ExamSnapshot {
     id: exam.id,
     title: exam.title,
     description: exam.description,
+    answerKeyMode: exam.answerKeyMode,
     questions: structuredClone(exam.questions),
     booklets: snapshotBooklets(exam.booklets),
     scheduling: structuredClone(exam.scheduling),
@@ -121,6 +122,40 @@ export function advanceBooklet(
   };
 }
 
+export interface SessionSettlement {
+  session: ExamSession;
+  /** True when the deadline sweep changed the stored attempt. */
+  changed: boolean;
+}
+
+/**
+ * Brings an idle attempt up to date with the clock: expired booklets advance
+ * and the final deadline submits it with a frozen result. This keeps an
+ * attempt from staying resumable forever when its screen is not open.
+ */
+export function settleSession(
+  session: ExamSession,
+  now: number = Date.now(),
+): SessionSettlement {
+  if (session.status !== 'active') return { session, changed: false };
+  const progress = syncBookletProgress(session, now);
+  if (!progress.completed) {
+    return progress.changed
+      ? { session: progress.session, changed: true }
+      : { session, changed: false };
+  }
+  const completedAt = progress.session.bookletEndsAt ?? now;
+  return {
+    changed: true,
+    session: {
+      ...progress.session,
+      status: 'submitted',
+      submittedAt: completedAt,
+      result: scoreExam(progress.session.exam, progress.session.responses, completedAt),
+    },
+  };
+}
+
 export function currentBookletRange(session: ExamSession): BookletRange | undefined {
   return bookletRanges(session.exam.booklets)[session.bookletIndex];
 }
@@ -142,8 +177,9 @@ export function responseFor(session: ExamSession, questionId: string): OptionInd
 }
 
 /**
- * Toggles one option while preserving other selections. Questions outside the
- * active booklet are locked, so their stored answers cannot be changed.
+ * Selects exactly one option per question: picking another option replaces the
+ * previous choice, and picking the current choice clears it. Questions outside
+ * the active booklet are locked, so their stored answers cannot be changed.
  */
 export function toggleResponse(
   session: ExamSession,
@@ -152,22 +188,62 @@ export function toggleResponse(
 ): ExamSession {
   if (!isQuestionAnswerable(session, questionId)) return session;
   const current = responseFor(session, questionId);
-  const next = current.includes(option)
-    ? current.filter((value) => value !== option)
-    : [...current, option].sort((a, b) => a - b);
+  const next: OptionIndex[] = current.length === 1 && current[0] === option ? [] : [option];
   const responses = { ...session.responses };
   if (next.length === 0) {
     delete responses[questionId];
   } else {
-    responses[questionId] = next as OptionIndex[];
+    responses[questionId] = next;
   }
   return { ...session, responses };
+}
+
+/**
+ * Applies the current answer key and editable metadata to an existing attempt.
+ * Question order and count, booklet structure, and timing stay frozen; only
+ * matching question ids receive the new key, and submitted attempts are
+ * re-scored so results stay relational.
+ */
+export function syncSessionWithExam(session: ExamSession, exam: Exam): ExamSession {
+  const keyById = new Map(exam.questions.map((question) => [question.id, question.key]));
+  const questions = session.exam.questions.map((question) => {
+    const key = keyById.get(question.id);
+    return key ? { ...question, key: structuredClone(key) } : question;
+  });
+  const nextExam: ExamSnapshot = {
+    ...session.exam,
+    title: exam.title,
+    description: exam.description,
+    answerKeyMode: exam.answerKeyMode,
+    questions,
+    updatedAt: exam.updatedAt,
+  };
+  if (session.status === 'submitted' && session.result) {
+    return {
+      ...session,
+      exam: nextExam,
+      result: scoreExam({ questions }, session.responses, session.result.completedAt),
+    };
+  }
+  return { ...session, exam: nextExam };
 }
 
 export function answeredCount(session: ExamSession): number {
   return session.exam.questions.filter(
     (question) => responseFor(session, question.id).length > 0,
   ).length;
+}
+
+/**
+ * Re-derives a submitted attempt's result from its stored responses and keys.
+ * This keeps saved percentages consistent when the scoring rules change.
+ */
+export function rescoreSubmittedSession(session: ExamSession): ExamSession {
+  if (session.status !== 'submitted' || !session.result) return session;
+  return {
+    ...session,
+    result: scoreExam(session.exam, session.responses, session.result.completedAt),
+  };
 }
 
 export function answeredInBookletCount(session: ExamSession): number {

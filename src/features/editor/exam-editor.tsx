@@ -4,72 +4,36 @@ import {
   ArrowRight,
   BookOpen,
   ClipboardPaste,
+  EyeOff,
+  KeyRound,
+  PenLine,
   Save,
   ShieldAlert,
-  ShieldCheck,
 } from 'lucide-react';
-import type { AnswerKey, Exam, Scheduling } from '@/types';
+import type { AnswerKey, Exam } from '@/types';
 import { useI18n } from '@/i18n';
-import type { MessageKey } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { AnswerKeyEditor } from '@/components/answer-key-editor';
 import { BookletEditor } from '@/components/booklet-editor';
 import { KeySheetAccordion } from '@/components/key-sheet-accordion';
 import { PdfGroupEditor } from '@/components/pdf-group-editor';
+import { SchedulingEditor, scheduleIssueKey } from '@/components/scheduling-editor';
 import { ImportDialog } from '@/features/import/import-dialog';
 import { totalDurationMinutes, totalQuestionCount } from '@/lib/booklets';
 import { defaultPdfTitle } from '@/lib/file';
-import {
-  formatDuration,
-  formatNumber,
-  fromDateTimeLocalValue,
-  toDateTimeLocalValue,
-} from '@/lib/format';
+import { formatNumber } from '@/lib/format';
+import { createId } from '@/lib/id';
 import { validateSchedule } from '@/lib/scheduling';
-import { saveExam } from '@/storage/db';
+import { StorageError, saveExam } from '@/storage/db';
 import { useToast } from '@/app/toast';
-
-function schedulingForMode(mode: Scheduling['mode'], current: Scheduling): Scheduling {
-  const fallbackStart = Date.now() + 60 * 60_000;
-  const fallbackEnd = Date.now() + 3 * 60 * 60_000;
-  if (mode === 'immediate') return { mode };
-  if (mode === 'scheduled') {
-    return { mode, startsAt: current.mode === 'scheduled' ? current.startsAt : fallbackStart };
-  }
-  if (mode === 'window') {
-    return {
-      mode,
-      startsAt: current.mode === 'window' ? current.startsAt : fallbackStart,
-      endsAt: current.mode === 'window' ? current.endsAt : fallbackEnd,
-    };
-  }
-  return {
-    mode: 'flexible',
-    windowStart: current.mode === 'flexible' ? current.windowStart : fallbackStart,
-    windowEnd: current.mode === 'flexible' ? current.windowEnd : fallbackEnd,
-  };
-}
-
-const SCHEDULE_MODE_LABELS: Record<Scheduling['mode'], MessageKey> = {
-  immediate: 'scheduleImmediate',
-  scheduled: 'scheduleStart',
-  window: 'scheduleWindow',
-  flexible: 'scheduleFlexible',
-};
 
 /**
  * Exam settings, stored PDFs, and the answer-key preview. Question text is
- * never entered, imported, or displayed; the QZ1 answer key defines questions.
+ * never entered, imported, or displayed; the question count comes from the QZ1
+ * key or from the booklets, depending on the exam's answer-key mode.
  */
 export function ExamEditor({
   exam,
@@ -89,6 +53,13 @@ export function ExamEditor({
   const [saving, setSaving] = useState(false);
 
   const BackIcon = dir === 'rtl' ? ArrowRight : ArrowLeft;
+  const keyMode = draft.answerKeyMode;
+  const keyModeLabel =
+    keyMode === 'qz1'
+      ? t('keyModeQz1')
+      : keyMode === 'manual'
+        ? t('keyModeManual')
+        : t('keyModeNone');
   const totalDuration = useMemo(
     () => totalDurationMinutes(draft.booklets),
     [draft.booklets],
@@ -108,6 +79,25 @@ export function ExamEditor({
 
   const patch = (changes: Partial<Exam>) => {
     setDraft((current) => ({ ...current, ...changes }));
+  };
+
+  const changeBooklets = (booklets: Exam['booklets']) => {
+    setDraft((current) => {
+      if (current.answerKeyMode === 'qz1') return { ...current, booklets };
+      const nextCount = totalQuestionCount(booklets);
+      return {
+        ...current,
+        booklets,
+        questions: Array.from(
+          { length: nextCount },
+          (_, index) =>
+            current.questions[index] ?? {
+              id: createId(),
+              key: { kind: 'unresolved' as const },
+            },
+        ),
+      };
+    });
   };
 
   const updateKey = (questionId: string, key: AnswerKey) => {
@@ -138,9 +128,6 @@ export function ExamEditor({
     const nextErrors: string[] = [];
     if (!title) nextErrors.push(t('validationTitle'));
     if (booklets.length === 0) nextErrors.push(t('validationBooklets'));
-    if (booklets.some((booklet) => booklet.pdfs.length === 0)) {
-      nextErrors.push(t('validationBookletPdf'));
-    }
     if (booklets.some((booklet) => booklet.questionCount < 1)) {
       nextErrors.push(t('validationBookletQuestionCount'));
     }
@@ -155,15 +142,14 @@ export function ExamEditor({
     if (booklets.some((booklet) => !Number.isInteger(booklet.durationMinutes) || booklet.durationMinutes < 0)) {
       nextErrors.push(t('validationBookletDuration'));
     }
-    if (answerPdfs.length === 0) nextErrors.push(t('validationAnswerPdf'));
-    if (unresolvedCount > 0) {
+    if (keyMode !== 'none' && unresolvedCount > 0) {
       nextErrors.push(
         t('validationUnresolved', { count: formatNumber(unresolvedCount, locale) }),
       );
       setSheetOpen(true);
     }
     if (schedule.errors.length > 0) {
-      nextErrors.push(...new Set(schedule.errors.map((issue) => t(issueKey(issue.code)))));
+      nextErrors.push(...new Set(schedule.errors.map((issue) => t(scheduleIssueKey(issue.code)))));
     }
     if (nextErrors.length > 0) {
       setErrors(nextErrors);
@@ -181,8 +167,13 @@ export function ExamEditor({
         updatedAt: Date.now(),
       });
       onDone();
-    } catch {
-      notify(t('storageUnavailable'), 'error');
+    } catch (error) {
+      notify(
+        error instanceof StorageError && error.code === 'pdfImmutable'
+          ? t('pdfImmutableError')
+          : t('storageUnavailable'),
+        'error',
+      );
     } finally {
       setSaving(false);
     }
@@ -198,8 +189,6 @@ export function ExamEditor({
     }));
     notify(t('importSuccess'));
   };
-
-  const timeValue = (value: number) => (Number.isFinite(value) ? toDateTimeLocalValue(value) : '');
 
   return (
     <div className="page-container pb-24 pt-6 sm:pt-8">
@@ -261,298 +250,166 @@ export function ExamEditor({
                   maxLength={4000}
                 />
               </div>
+              <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <KeyRound className="size-3.5" aria-hidden="true" />
+                {t('answerKeyMode')}:
+                <span className="font-medium text-foreground">{keyModeLabel}</span>
+              </p>
             </CardContent>
           </Card>
 
           <section aria-labelledby="pdfs-heading" className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="pdfs-heading" className="text-lg font-semibold">
-                {t('pdfFiles')}
-              </h2>
-              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <ShieldCheck className="size-3.5 shrink-0" aria-hidden="true" />
-                {t('pdfStoredNote')}
-              </span>
-            </div>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">{t('noTextNote')}</p>
+            <h2 id="pdfs-heading" className="text-lg font-semibold">
+              {t('pdfFiles')}
+            </h2>
 
             <BookletEditor
               booklets={draft.booklets}
-              onChange={(booklets) => patch({ booklets })}
+              onChange={changeBooklets}
               totalQuestions={draft.questions.length}
             />
 
-            <PdfGroupEditor
-              title={t('answerBooklet')}
-              hint={t('answerBookletHint')}
-              icon={<BookOpen className="size-5" aria-hidden="true" />}
-              pdfs={draft.answerPdfs}
-              onChange={(answerPdfs) => patch({ answerPdfs })}
-            />
-          </section>
-
-          <section aria-labelledby="questions-heading" className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-baseline gap-2">
-                <h2 id="questions-heading" className="text-lg font-semibold">
-                  {t('questionsSection')}
-                </h2>
-                <span className="tnum text-sm text-muted-foreground">
-                  {formatNumber(draft.questions.length, locale)}
-                </span>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-                <ClipboardPaste className="size-4" aria-hidden="true" />
-                {t('importKeyButton')}
-              </Button>
-            </div>
-
-            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
-              <ShieldCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              {t('questionsFromKey')}
-            </p>
-
-            {(unresolvedCount > 0 || excludedCount > 0) && (
-              <div className="flex flex-wrap items-center gap-3 text-xs">
-                {unresolvedCount > 0 && (
-                  <span className="text-unanswered">
-                    {t('unresolvedLabel')} · {formatNumber(unresolvedCount, locale)}
-                  </span>
-                )}
-                {excludedCount > 0 && (
-                  <span className="text-excluded">
-                    {t('excludedLabel')} · {formatNumber(excludedCount, locale)}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {unresolvedCount > 0 && (
-              <div
-                role="alert"
-                className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-unanswered-border bg-unanswered-bg px-3 py-2 text-xs leading-relaxed text-unanswered"
-              >
-                <span className="flex items-start gap-1.5">
-                  <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  {t('mustResolveUnresolved', {
-                    count: formatNumber(unresolvedCount, locale),
-                  })}
-                </span>
-                <Button variant="outline" size="sm" onClick={() => setSheetOpen(true)}>
-                  {t('openKeyEditor')}
-                </Button>
-              </div>
-            )}
-
-            <KeySheetAccordion
-              count={draft.questions.length}
-              subtitle={t('keyPreviewSubtitle')}
-              open={sheetOpen}
-              onOpenChange={setSheetOpen}
-            >
-              <div className="flex flex-col gap-2 border-b border-border bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground sm:px-4">
-                {t('keyEditorHint')}
-                <span className="flex items-start gap-1.5 text-unanswered">
-                  <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  {t('aiFallibleNote')}
-                </span>
-              </div>
-              <AnswerKeyEditor
-                items={draft.questions.map((question) => ({
-                  id: question.id,
-                  key: question.key,
-                }))}
-                onChange={updateKey}
+            {keyMode !== 'none' && (
+              <PdfGroupEditor
+                title={t('answerBooklet')}
+                hint={
+                  keyMode === 'manual'
+                    ? t('answerBookletManualHint')
+                    : t('answerBookletHint')
+                }
+                icon={<BookOpen className="size-5" aria-hidden="true" />}
+                pdfs={draft.answerPdfs}
+                onChange={(answerPdfs) => patch({ answerPdfs })}
               />
-            </KeySheetAccordion>
+            )}
           </section>
-        </div>
 
-        <aside className="stagger flex flex-col gap-4 lg:sticky lg:top-20">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('scheduling')}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="schedule-mode">{t('scheduling')}</Label>
-                <Select
-                  value={draft.scheduling.mode}
-                  onValueChange={(value) =>
-                    patch({
-                      scheduling: schedulingForMode(
-                        value as Scheduling['mode'],
-                        draft.scheduling,
-                      ),
-                    })
-                  }
-                >
-                  <SelectTrigger id="schedule-mode">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(SCHEDULE_MODE_LABELS) as Scheduling['mode'][]).map((mode) => (
-                      <SelectItem key={mode} value={mode}>
-                        {t(SCHEDULE_MODE_LABELS[mode])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {keyMode === 'none' ? (
+            <Card>
+              <CardContent className="flex flex-wrap items-start gap-3 p-5">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-secondary text-muted-foreground">
+                  <EyeOff className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold">{t('keyModeNone')}</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {t('noKeyExamNote')}
+                  </p>
+                </div>
+                <span className="tnum shrink-0 text-sm text-muted-foreground">
+                  {formatNumber(draft.questions.length, locale)} {t('questionCount')}
+                </span>
+              </CardContent>
+            </Card>
+          ) : (
+            <section aria-labelledby="questions-heading" className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-baseline gap-2">
+                  <h2 id="questions-heading" className="text-lg font-semibold">
+                    {t('questionsSection')}
+                  </h2>
+                  <span className="tnum text-sm text-muted-foreground">
+                    {formatNumber(draft.questions.length, locale)}
+                  </span>
+                </div>
+                {keyMode === 'qz1' && (
+                  <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                    <ClipboardPaste className="size-4" aria-hidden="true" />
+                    {t('importKeyButton')}
+                  </Button>
+                )}
               </div>
 
-              {draft.scheduling.mode !== 'immediate' && (
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="schedule-start">
-                      {draft.scheduling.mode === 'scheduled' || draft.scheduling.mode === 'window'
-                        ? t('startsAt')
-                        : t('windowStart')}
-                    </Label>
-                    <Input
-                      id="schedule-start"
-                      type="datetime-local"
-                      value={timeValue(
-                        draft.scheduling.mode === 'flexible'
-                          ? draft.scheduling.windowStart
-                          : draft.scheduling.startsAt,
-                      )}
-                      onChange={(event) => {
-                        const value = fromDateTimeLocalValue(event.target.value);
-                        const timestamp = value ?? Number.NaN;
-                        if (draft.scheduling.mode === 'scheduled') {
-                          patch({ scheduling: { mode: 'scheduled', startsAt: timestamp } });
-                        } else if (draft.scheduling.mode === 'window') {
-                          patch({
-                            scheduling: {
-                              mode: 'window',
-                              startsAt: timestamp,
-                              endsAt: draft.scheduling.endsAt,
-                            },
-                          });
-                        } else if (draft.scheduling.mode === 'flexible') {
-                          patch({
-                            scheduling: {
-                              mode: 'flexible',
-                              windowStart: timestamp,
-                              windowEnd: draft.scheduling.windowEnd,
-                            },
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-                  {draft.scheduling.mode !== 'scheduled' && (
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="schedule-end">
-                        {draft.scheduling.mode === 'window' ? t('endsAt') : t('windowEnd')}
-                      </Label>
-                      <Input
-                        id="schedule-end"
-                        type="datetime-local"
-                        value={timeValue(
-                          draft.scheduling.mode === 'window'
-                            ? draft.scheduling.endsAt
-                            : draft.scheduling.mode === 'flexible'
-                              ? draft.scheduling.windowEnd
-                              : Number.NaN,
-                        )}
-                        onChange={(event) => {
-                          const value = fromDateTimeLocalValue(event.target.value);
-                          const timestamp = value ?? Number.NaN;
-                          if (draft.scheduling.mode === 'window') {
-                            patch({
-                              scheduling: {
-                                mode: 'window',
-                                startsAt: draft.scheduling.startsAt,
-                                endsAt: timestamp,
-                              },
-                            });
-                          } else if (draft.scheduling.mode === 'flexible') {
-                            patch({
-                              scheduling: {
-                                mode: 'flexible',
-                                windowStart: draft.scheduling.windowStart,
-                                windowEnd: timestamp,
-                              },
-                            });
-                          }
-                        }}
-                      />
-                    </div>
+              {keyMode === 'manual' && (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t('manualKeyDesc')}
+                </p>
+              )}
+
+              {(unresolvedCount > 0 || excludedCount > 0) && (
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  {unresolvedCount > 0 && (
+                    <span className="text-unanswered">
+                      {t('unresolvedLabel')} · {formatNumber(unresolvedCount, locale)}
+                    </span>
                   )}
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    {t('localTimeNote')}
-                  </p>
+                  {excludedCount > 0 && (
+                    <span className="text-excluded">
+                      {t('excludedLabel')} · {formatNumber(excludedCount, locale)}
+                    </span>
+                  )}
                 </div>
               )}
 
-              {schedule.errors.map((issue) => (
-                <p key={issue.code} className="text-xs text-incorrect" role="alert">
-                  {t(issueKey(issue.code))}
-                </p>
-              ))}
-              {schedule.warnings.map((issue) => (
-                <p key={issue.code} className="text-xs text-warning">
-                  {t(issueKey(issue.code))}
-                </p>
-              ))}
-            </CardContent>
-          </Card>
+              {unresolvedCount > 0 && (
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-unanswered-border bg-unanswered-bg px-3 py-2 text-xs leading-relaxed text-unanswered"
+                >
+                  <span className="flex items-start gap-1.5">
+                    <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    {t('mustResolveUnresolved', {
+                      count: formatNumber(unresolvedCount, locale),
+                    })}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setSheetOpen(true)}>
+                    {t('openKeyEditor')}
+                  </Button>
+                </div>
+              )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('booklets')}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2.5 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">{t('booklets')}</span>
-                <span className="tnum font-medium">
-                  {formatNumber(draft.booklets.length, locale)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">{t('questionCount')}</span>
-                <span className="tnum font-medium">
-                  {formatNumber(assignedQuestions, locale)} /{' '}
-                  {formatNumber(draft.questions.length, locale)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">{t('totalDurationLabel')}</span>
-                <span className="tnum font-medium">
-                  {totalDuration > 0
-                    ? formatDuration(totalDuration * 60_000, locale)
-                    : t('untimed')}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+              <KeySheetAccordion
+                count={draft.questions.length}
+                title={keyMode === 'manual' ? t('manualKeyTitle') : undefined}
+                subtitle={
+                  keyMode === 'manual'
+                    ? t('manualKeyPreviewSubtitle')
+                    : t('keyPreviewSubtitle')
+                }
+                open={sheetOpen}
+                onOpenChange={setSheetOpen}
+              >
+                {keyMode === 'qz1' ? (
+                  <div className="flex items-start gap-1.5 border-b border-border bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-unanswered sm:px-4">
+                    <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    {t('aiFallibleNote')}
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-1.5 border-b border-border bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground sm:px-4">
+                    <PenLine className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    {t('manualKeyEditorHint')}
+                  </div>
+                )}
+                <AnswerKeyEditor
+                  items={draft.questions.map((question) => ({
+                    id: question.id,
+                    key: question.key,
+                  }))}
+                  onChange={updateKey}
+                  single={keyMode === 'manual'}
+                />
+              </KeySheetAccordion>
+            </section>
+          )}
+        </div>
+
+        <aside className="stagger flex flex-col gap-4 lg:sticky lg:top-20">
+          <SchedulingEditor
+            scheduling={draft.scheduling}
+            durationMinutes={totalDuration}
+            onChange={(scheduling) => patch({ scheduling })}
+          />
         </aside>
       </div>
 
-      <ImportDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        questions={draft.questions}
-        onApply={applyImport}
-      />
+      {keyMode === 'qz1' && (
+        <ImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          questions={draft.questions}
+          onApply={applyImport}
+        />
+      )}
     </div>
   );
-}
-
-function issueKey(code: ReturnType<typeof validateSchedule>['errors'][number]['code']): MessageKey {
-  switch (code) {
-    case 'invalidDuration':
-      return 'invalidDuration';
-    case 'invalidStart':
-      return 'invalidStart';
-    case 'invalidEnd':
-      return 'invalidEnd';
-    case 'endBeforeStart':
-      return 'endBeforeStart';
-    case 'durationExceedsWindow':
-      return 'durationExceedsWindow';
-    default:
-      return 'genericError';
-  }
 }

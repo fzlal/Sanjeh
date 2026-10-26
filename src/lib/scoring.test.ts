@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { OptionIndex } from '@/types';
 import { makeExam, makeQuestion } from '@/test/fixtures';
-import { isExactMatch, scoreExam } from './scoring';
+import { isAcceptedSelection, scoreExam } from './scoring';
 
 const exam = makeExam({
   questions: [
@@ -13,12 +13,13 @@ const exam = makeExam({
   ],
 });
 
-describe('isExactMatch', () => {
-  it('requires the exact set regardless of order or duplicates', () => {
-    expect(isExactMatch([3, 1] as OptionIndex[], [1, 3])).toBe(true);
-    expect(isExactMatch([1] as OptionIndex[], [1, 3])).toBe(false);
-    expect(isExactMatch([1, 2, 3] as OptionIndex[], [1, 3])).toBe(false);
-    expect(isExactMatch([] as OptionIndex[], [1, 3])).toBe(false);
+describe('isAcceptedSelection', () => {
+  it('accepts any correct option and rejects selections outside the key', () => {
+    expect(isAcceptedSelection([3, 1] as OptionIndex[], [1, 3])).toBe(true);
+    expect(isAcceptedSelection([1] as OptionIndex[], [1, 3])).toBe(true);
+    expect(isAcceptedSelection([1, 2] as OptionIndex[], [1, 3])).toBe(false);
+    expect(isAcceptedSelection([1, 2, 3] as OptionIndex[], [1, 3])).toBe(false);
+    expect(isAcceptedSelection([] as OptionIndex[], [1, 3])).toBe(false);
   });
 });
 
@@ -37,7 +38,7 @@ describe('scoreExam', () => {
     expect(result.incorrect).toBe(1);
     expect(result.unanswered).toBe(1);
     expect(result.scoredQuestions).toBe(3);
-    expect(result.percentage).toBe(33.3);
+    expect(result.percentage).toBe(22.2);
   });
 
   it('excludes excluded and unresolved questions from the denominator', () => {
@@ -84,12 +85,37 @@ describe('scoreExam', () => {
     expect(result.percentage).toBeNull();
   });
 
-  it('reports a perfect score for an exact multi-answer match', () => {
-    const perfect = makeExam({
-      questions: [makeQuestion({ id: 'single', key: { kind: 'known', correct: [1, 3] } })],
+  it('accepts any one of the listed correct options', () => {
+    const multi = makeExam({
+      questions: [makeQuestion({ id: 'multi', key: { kind: 'known', correct: [1, 3] } })],
     });
-    const result = scoreExam(perfect, { single: [3, 1] }, 1);
-    expect(result.correct).toBe(1);
-    expect(result.percentage).toBe(100);
+    expect(scoreExam(multi, { multi: [3] }, 1).percentage).toBe(100);
+    expect(scoreExam(multi, { multi: [1] }, 1).percentage).toBe(100);
+    expect(scoreExam(multi, { multi: [2] }, 1).percentage).toBe(-33.3);
+  });
+
+  it('awards 3 points per correct answer and deducts 1 per wrong answer', () => {
+    const graded = makeExam({
+      questions: [
+        makeQuestion({ id: 'a', key: { kind: 'known', correct: [1] } }),
+        makeQuestion({ id: 'b', key: { kind: 'known', correct: [2] } }),
+        makeQuestion({ id: 'c', key: { kind: 'known', correct: [3] } }),
+      ],
+    });
+    const result = scoreExam(graded, { a: [1], b: [1], c: [4] }, 1);
+    expect(result.percentage).toBe(11.1);
+  });
+
+  it('allows the overall percentage to go negative', () => {
+    const graded = makeExam({
+      questions: [
+        makeQuestion({ id: 'a', key: { kind: 'known', correct: [1] } }),
+        makeQuestion({ id: 'b', key: { kind: 'known', correct: [2] } }),
+      ],
+    });
+    const result = scoreExam(graded, { a: [2], b: [1] }, 1);
+    expect(result.correct).toBe(0);
+    expect(result.incorrect).toBe(2);
+    expect(result.percentage).toBe(-33.3);
   });
 });

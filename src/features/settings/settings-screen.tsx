@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import {
+  ArrowLeft,
+  ArrowRight,
   Download,
-  Eye,
   HardDriveDownload,
   Info,
   Loader2,
@@ -33,6 +34,7 @@ import {
   parseBackupFile,
 } from '@/storage/backup';
 import { clearAllStores, replaceAllData } from '@/storage/db';
+import { saveBlobToDownloads } from '@/storage/downloads';
 import { DEFAULT_SETTINGS, clearBootSettings } from '@/storage/boot';
 import { APP_VERSION } from '@/lib/config';
 
@@ -40,12 +42,15 @@ export function SettingsScreen({
   exams,
   sessions,
   onDataReplaced,
+  onBack,
 }: {
   exams: Exam[];
   sessions: ExamSession[];
   onDataReplaced: () => void;
+  onBack: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, dir } = useI18n();
+  const BackIcon = dir === 'rtl' ? ArrowRight : ArrowLeft;
   const { settings, updateSettings, replaceSettings, storageFailed } = useSettings();
   const { notify } = useToast();
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -53,24 +58,23 @@ export function SettingsScreen({
   const [resetOpen, setResetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const exportBackup = () => {
-    const backup = createBackup(exams, sessions, settings);
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = backupFileName();
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+  const exportBackup = async () => {
+    setBusy(true);
+    try {
+      const backup = await createBackup(exams, sessions, settings);
+      const saved = await saveBlobToDownloads(backupFileName(), backup);
+      if (!saved) notify(t('downloadFailed'), 'error');
+    } catch {
+      notify(t('storageUnavailable'), 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      const text = await file.text();
-      const backup = parseBackupFile(text);
+      const backup = await parseBackupFile(file);
       setPendingBackup(backup);
     } catch {
       notify(t('importDataError'), 'error');
@@ -110,9 +114,12 @@ export function SettingsScreen({
 
   return (
     <div className="page-container max-w-4xl pb-16 pt-6 sm:pt-9">
-      <div className="mb-7 flex flex-col gap-1">
+      <div className="mb-7 flex flex-wrap items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          <BackIcon className="size-4" aria-hidden="true" />
+          {t('back')}
+        </Button>
         <h1 className="text-2xl font-semibold">{t('settings')}</h1>
-        <p className="text-sm text-muted-foreground">{t('tagline')}</p>
       </div>
 
       {storageFailed && (
@@ -134,7 +141,6 @@ export function SettingsScreen({
               value={settings.language}
               onChange={(language) => updateSettings({ language })}
             />
-            <p className="text-[11px] text-muted-foreground">{t('languageHint')}</p>
           </CardContent>
         </Card>
 
@@ -151,7 +157,6 @@ export function SettingsScreen({
                 onChange={(appearance) => updateSettings({ appearance })}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">{t('themeHint')}</p>
           </CardContent>
         </Card>
 
@@ -162,7 +167,7 @@ export function SettingsScreen({
           <CardContent className="flex flex-col gap-4">
             <p className="text-sm leading-relaxed text-muted-foreground">{t('backupNote')}</p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={exportBackup}>
+              <Button variant="outline" onClick={() => void exportBackup()} disabled={busy}>
                 <Download className="size-4" aria-hidden="true" />
                 {t('exportBackup')}
               </Button>
@@ -173,7 +178,7 @@ export function SettingsScreen({
               <input
                 ref={fileInput}
                 type="file"
-                accept="application/json,.json"
+                accept="application/zip,application/json,.zip,.json"
                 className="sr-only"
                 onChange={(event) => {
                   void handleFile(event.target.files?.[0]);
@@ -232,12 +237,6 @@ export function SettingsScreen({
                   {t('privacyText')}
                 </span>
               </div>
-            </div>
-            <div className="flex items-start gap-2.5 border-t border-border pt-4">
-              <Eye className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="text-xs leading-relaxed text-muted-foreground">
-                {t('setupNote')}
-              </span>
             </div>
           </CardContent>
         </Card>

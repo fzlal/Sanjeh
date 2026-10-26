@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { downloadPdf } from '@/lib/file';
+import { downloadPdf } from '@/storage/downloads';
 import { formatBytes, formatNumber } from '@/lib/format';
 import { useI18n } from '@/i18n';
 import { useToast } from '@/app/toast';
@@ -36,12 +36,12 @@ export function PdfDownloadButton({
   const { notify } = useToast();
   const [open, setOpen] = useState(false);
 
-  const download = (pdf: StoredPdf) => {
-    if (!downloadPdf(pdf)) notify(t('downloadFailed'), 'error');
+  const download = async (pdf: StoredPdf) => {
+    if (!(await downloadPdf(pdf))) notify(t('downloadFailed'), 'error');
   };
 
   const activate = () => {
-    if (pdfs.length === 1) download(pdfs[0]);
+    if (pdfs.length === 1) void download(pdfs[0]);
     else if (pdfs.length > 1) setOpen(true);
   };
 
@@ -84,7 +84,7 @@ export function PdfDownloadButton({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => download(pdf)}
+                  onClick={() => void download(pdf)}
                   aria-label={`${t('download')} ${pdf.title}`}
                 >
                   <Download aria-hidden="true" />

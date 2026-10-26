@@ -1,3 +1,5 @@
+import { calendarForLocale } from '@/lib/calendar';
+
 const numberCache = new Map<string, Intl.NumberFormat>();
 
 function numberFormat(locale: string, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
@@ -17,7 +19,7 @@ export function formatNumber(
   return numberFormat(locale, options).format(value);
 }
 
-/** `value` is a percentage between 0 and 100. */
+/** `value` is a percentage of the maximum points and may be negative. */
 export function formatPercent(value: number | null, locale: string): string {
   if (value === null) return '—';
   return numberFormat(locale, {
@@ -31,18 +33,25 @@ export function formatDate(
   locale: string,
   options: Intl.DateTimeFormatOptions = { dateStyle: 'medium' },
 ): string {
-  return new Intl.DateTimeFormat(locale, options).format(timestamp);
+  return new Intl.DateTimeFormat(locale, {
+    calendar: calendarForLocale(locale),
+    ...options,
+  }).format(timestamp);
 }
 
 export function formatDateTime(timestamp: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
+    calendar: calendarForLocale(locale),
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(timestamp);
 }
 
 export function formatTime(timestamp: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(timestamp);
+  return new Intl.DateTimeFormat(locale, {
+    calendar: calendarForLocale(locale),
+    timeStyle: 'short',
+  }).format(timestamp);
 }
 
 /** Localized two-digit clock for a millisecond remainder: 04:31 or 1:02:09. */
@@ -98,20 +107,3 @@ export function formatBytes(bytes: number, locale: string): string {
   return `${formatNumber(bytes, locale)} B`;
 }
 
-function pad(value: number, length = 2): string {
-  return String(value).padStart(length, '0');
-}
-
-/** Value for `<input type="datetime-local">` in the device's local timezone. */
-export function toDateTimeLocalValue(timestamp: number): string {
-  const date = new Date(timestamp);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
-
-export function fromDateTimeLocalValue(value: string): number | null {
-  if (!value) return null;
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : null;
-}

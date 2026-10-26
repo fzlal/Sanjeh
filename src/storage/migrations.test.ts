@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   migrateExamV2ToV3,
   migrateExamV3ToV4,
+  migrateExamV4ToV5,
   migrateSessionV3ToV4,
 } from './migrations';
 
@@ -75,6 +76,53 @@ describe('migrateExamV3ToV4', () => {
   it('is idempotent once booklets exist', () => {
     const current = { booklets: [{ id: 'b1' }] };
     expect(migrateExamV3ToV4(current)).toBe(current);
+  });
+});
+
+describe('migrateExamV4ToV5', () => {
+  it('turns base64 PDFs into native Blobs with stable identities', () => {
+    const migrated = migrateExamV4ToV5({
+      id: 'exam-1',
+      answerPdfs: [answerPdf],
+      booklets: [
+        {
+          id: 'b1',
+          title: '',
+          pdfs: [examPdf],
+          questionCount: 1,
+          durationMinutes: 10,
+        },
+      ],
+    }) as {
+      answerPdfs: Array<Record<string, unknown>>;
+      booklets: Array<{ pdfs: Array<Record<string, unknown>> }>;
+    };
+
+    const pdf = migrated.booklets[0].pdfs[0];
+    expect(pdf).not.toHaveProperty('data');
+    expect(typeof pdf.id).toBe('string');
+    expect(pdf.id).toBeTruthy();
+    expect(pdf.digest).toBe('');
+    expect(pdf.blob).toBeInstanceOf(Blob);
+    expect((pdf.blob as Blob).size).toBe(9);
+    expect(pdf.size).toBe(9);
+    expect(migrated.answerPdfs[0].blob).toBeInstanceOf(Blob);
+  });
+
+  it('leaves records that already store a Blob untouched', () => {
+    const blob = new Blob(['pdf'], { type: 'application/pdf' });
+    const pdf = {
+      id: 'pdf-1',
+      title: 'Key',
+      name: 'key.pdf',
+      type: 'application/pdf',
+      size: 3,
+      digest: 'abc',
+      blob,
+    };
+    const current = { answerPdfs: [pdf], booklets: [] };
+    const migrated = migrateExamV4ToV5(current) as { answerPdfs: unknown[] };
+    expect(migrated.answerPdfs[0]).toBe(pdf);
   });
 });
 

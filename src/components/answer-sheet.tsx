@@ -18,7 +18,7 @@ export interface AnswerSheetRow {
   locked?: boolean;
 }
 
-type Variant = 'answering' | 'review' | 'key';
+type Variant = 'answering' | 'review' | 'key' | 'selected';
 type BubbleTone = 'neutral' | 'selected' | 'correct' | 'correctOutline' | 'incorrect' | 'muted';
 
 type GlyphName = 'check' | 'cross' | 'circle' | 'slash' | 'lock';
@@ -70,6 +70,7 @@ function bubbleTone(
     return isSelected ? 'selected' : 'neutral';
   }
   if (variant === 'key') return isCorrect ? 'correct' : 'neutral';
+  if (variant === 'selected') return isSelected ? 'selected' : 'neutral';
   if (row.outcome === 'unresolved') return isSelected ? 'muted' : 'neutral';
   if (isCorrect && isSelected) return 'correct';
   if (isCorrect) return 'correctOutline';
@@ -129,6 +130,11 @@ export function AnswerSheet({
             label: t('unresolvedLabel'),
           }
         : { glyph: 'check' as const, tone: 'text-correct', label: t('correctLabel') };
+    }
+    if (variant === 'selected') {
+      return row.selected.length > 0
+        ? { glyph: 'check' as const, tone: 'text-primary', label: t('answered') }
+        : { glyph: 'circle' as const, tone: 'text-muted-foreground', label: t('unansweredLabel') };
     }
     if (row.outcome === 'correct') {
       return { glyph: 'check' as const, tone: 'text-correct', label: t('correctLabel') };
@@ -268,7 +274,11 @@ export function AnswerSheet({
                       <span
                         key={option}
                         data-option={option}
-                        aria-label={variant === 'key' && isSelected ? label : undefined}
+                        aria-label={
+                          (variant === 'key' || variant === 'selected') && isSelected
+                            ? label
+                            : undefined
+                        }
                         className={className}
                       >
                         {formatNumber(option, locale)}

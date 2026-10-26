@@ -11,9 +11,12 @@ import {
   isQuestionAnswerable,
   isSessionExpired,
   responseFor,
+  settleSession,
   syncBookletProgress,
+  syncSessionWithExam,
   toggleResponse,
 } from './session';
+import { scoreExam } from './scoring';
 
 const MINUTE = 60_000;
 const start = 1000;
@@ -93,13 +96,13 @@ describe('createSession', () => {
 });
 
 describe('responded questions', () => {
-  it('supports multiple selections per question and normalizes them', () => {
+  it('keeps exactly one selected option per question', () => {
     const session = createSession(makeExam({ questions: baseQuestions() }), 1);
     const afterFirst = toggleResponse(session, 'a', 3);
     const afterSecond = toggleResponse(afterFirst, 'a', 1);
-    expect(responseFor(afterSecond, 'a')).toEqual([1, 3]);
+    expect(afterFirst.responses.a).toEqual([3]);
+    expect(responseFor(afterSecond, 'a')).toEqual([1]);
     expect(session.responses).toEqual({});
-    expect(afterSecond.responses.a).toEqual([1, 3]);
   });
 
   it('removes a question entry when its last option is toggled off', () => {
@@ -126,6 +129,66 @@ describe('responded questions', () => {
     expect(updated.responses.d).toEqual([2]);
     expect(responseFor(updated, 'd')).toEqual([2]);
     expect(responseFor(updated, 'a')).toEqual([]);
+  });
+});
+
+describe('relational exam updates', () => {
+  it('applies a new key and re-scores a submitted attempt by question id', () => {
+    const exam = makeExam({
+      id: 'exam-sync',
+      questions: [
+        makeQuestion({ id: 'q1', key: { kind: 'known', correct: [1] } }),
+        makeQuestion({ id: 'q2', key: { kind: 'known', correct: [2] } }),
+      ],
+      booklets: [makeBooklet({ questionCount: 2 })],
+    });
+    const session = createSession(exam, 1000);
+    const answered = {
+      ...toggleResponse(session, 'q1', 1),
+      status: 'submitted' as const,
+      submittedAt: 2000,
+      result: scoreExam(exam, { ...session.responses, q1: [1] }, 2000),
+    };
+    expect(answered.result.correct).toBe(1);
+    expect(answered.result.percentage).toBe(50);
+
+    const edited: typeof exam = {
+      ...exam,
+      title: 'Edited title',
+      questions: [
+        { id: 'q1', key: { kind: 'known', correct: [3] } },
+        { id: 'q2', key: { kind: 'known', correct: [2] } },
+        { id: 'q3', key: { kind: 'known', correct: [4] } },
+      ],
+      updatedAt: 3000,
+    };
+    const synced = syncSessionWithExam(answered, edited);
+
+    expect(synced.exam.questions.map((question) => question.id)).toEqual(['q1', 'q2']);
+    expect(synced.exam.questions[0].key).toEqual({ kind: 'known', correct: [3] });
+    expect(synced.exam.title).toBe('Edited title');
+    expect(synced.result?.correct).toBe(0);
+    expect(synced.result?.percentage).toBe(-16.7);
+    expect(synced.result?.totalQuestions).toBe(2);
+    expect(synced.result?.completedAt).toBe(2000);
+  });
+
+  it('updates an active attempt without adding questions', () => {
+    const exam = makeExam({
+      questions: [makeQuestion({ id: 'a', key: { kind: 'known', correct: [1] } })],
+      booklets: [makeBooklet({ questionCount: 1 })],
+    });
+    const session = createSession(exam, 1000);
+    const synced = syncSessionWithExam(session, {
+      ...exam,
+      questions: [
+        { id: 'a', key: { kind: 'unresolved' } },
+        { id: 'b', key: { kind: 'known', correct: [2] } },
+      ],
+    });
+    expect(synced.exam.questions).toHaveLength(1);
+    expect(synced.exam.questions[0].key).toEqual({ kind: 'unresolved' });
+    expect(synced.result).toBeUndefined();
   });
 });
 
@@ -249,6 +312,56 @@ describe('booklet locking', () => {
     session = toggleResponse(session, 'd', 2);
     expect(answeredInBookletCount(session)).toBe(1);
     expect(answeredCount(session)).toBe(3);
+  });
+});
+
+describe('automatic settlement', () => {
+  it('submits an attempt once its final deadline passes', () => {
+    let session = createSession(twoBookletExam(), start);
+    session = toggleResponse(session, 'a', 1);
+
+    const settled = settleSession(session, start + 30 * MINUTE);
+    expect(settled.changed).toBe(true);
+    expect(settled.session.status).toBe('submitted');
+    expect(settled.session.submittedAt).toBe(start + 30 * MINUTE);
+    expect(settled.session.result?.completedAt).toBe(start + 30 * MINUTE);
+    expect(settled.session.result?.correct).toBe(1);
+    expect(settled.session.result?.totalQuestions).toBe(5);
+  });
+
+  it('advances an expired booklet but keeps the attempt active', () => {
+    const session = createSession(twoBookletExam(), start);
+    const settled = settleSession(session, start + 15 * MINUTE);
+    expect(settled.changed).toBe(true);
+    expect(settled.session.status).toBe('active');
+    expect(settled.session.bookletIndex).toBe(1);
+    expect(settled.session.result).toBeUndefined();
+  });
+
+  it('leaves an attempt before any deadline untouched', () => {
+    const session = createSession(twoBookletExam(), start);
+    const settled = settleSession(session, start + MINUTE);
+    expect(settled.changed).toBe(false);
+    expect(settled.session).toBe(session);
+  });
+
+  it('never resettles a submitted attempt', () => {
+    const session = createSession(twoBookletExam(), start);
+    const submitted = settleSession(session, start + 30 * MINUTE).session;
+    const again = settleSession(submitted, start + 60 * MINUTE);
+    expect(again.changed).toBe(false);
+    expect(again.session).toBe(submitted);
+  });
+
+  it('keeps untimed attempts active indefinitely', () => {
+    const exam = makeExam({
+      questions: baseQuestions(),
+      booklets: [makeBooklet({ questionCount: 5, durationMinutes: 0 })],
+    });
+    const session = createSession(exam, start);
+    const settled = settleSession(session, start + 10_000_000);
+    expect(settled.changed).toBe(false);
+    expect(settled.session.status).toBe('active');
   });
 });
 

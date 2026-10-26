@@ -1,7 +1,7 @@
 import { Ban, RotateCcw } from 'lucide-react';
 import type { AnswerKey } from '@/types';
 import { OPTION_INDICES } from '@/types';
-import { toggleCorrectOption, toggleExcluded } from '@/lib/answerKey';
+import { chooseCorrectOption, toggleCorrectOption, toggleExcluded } from '@/lib/answerKey';
 import { formatNumber } from '@/lib/format';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -12,15 +12,19 @@ export interface AnswerKeyEditorItem {
 }
 
 /**
- * Editable answer key. Options are toggles (multiple correct options allowed),
- * clearing them returns the question to unresolved, and exclusion is separate.
+ * Editable answer key. Options are toggles (multiple correct options allowed)
+ * unless `single` is set, where each pick replaces the previous correct option.
+ * Clearing the selection returns the question to unresolved, and exclusion is
+ * separate.
  */
 export function AnswerKeyEditor({
   items,
   onChange,
+  single = false,
 }: {
   items: AnswerKeyEditorItem[];
   onChange: (questionId: string, key: AnswerKey) => void;
+  single?: boolean;
 }) {
   const { t, locale } = useI18n();
 
@@ -65,7 +69,14 @@ export function AnswerKeyEditor({
                     aria-pressed={selected}
                     aria-label={label}
                     title={label}
-                    onClick={() => onChange(item.id, toggleCorrectOption(item.key, option))}
+                    onClick={() =>
+                      onChange(
+                        item.id,
+                        single
+                          ? chooseCorrectOption(item.key, option)
+                          : toggleCorrectOption(item.key, option),
+                      )
+                    }
                     className={cn(
                       'tnum flex size-8 items-center justify-center rounded-full border text-xs font-semibold transition-[background-color,border-color,color,transform] duration-150 active:scale-90',
                       selected

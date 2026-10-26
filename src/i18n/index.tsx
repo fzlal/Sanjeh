@@ -15,6 +15,7 @@ import {
 import type { MessageKey, Messages } from './locales/en';
 import { en } from './locales/en';
 import { fa } from './locales/fa';
+import { calendarForLocale } from '@/lib/calendar';
 
 export const dictionaries: Record<LanguageCode, Messages> = {
   fa,
@@ -99,7 +100,10 @@ export function useFormatters() {
       number: (value: number, options?: Intl.NumberFormatOptions) =>
         new Intl.NumberFormat(locale, options).format(value),
       date: (timestamp: number, options?: Intl.DateTimeFormatOptions) =>
-        new Intl.DateTimeFormat(locale, options ?? { dateStyle: 'medium' }).format(timestamp),
+        new Intl.DateTimeFormat(locale, {
+          calendar: calendarForLocale(locale),
+          ...(options ?? { dateStyle: 'medium' }),
+        }).format(timestamp),
     }),
     [locale],
   );

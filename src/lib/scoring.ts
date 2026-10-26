@@ -9,16 +9,29 @@ export function normalizeSelection(selected: readonly number[] | undefined): Opt
   ) as OptionIndex[];
 }
 
-export function isExactMatch(selected: readonly OptionIndex[], correct: readonly OptionIndex[]): boolean {
+/**
+ * Accepts any selection made only of the key's correct options. Because the
+ * student picks one option per question, any single correct option is enough;
+ * a selection containing an option outside the key is wrong.
+ */
+export function isAcceptedSelection(
+  selected: readonly OptionIndex[],
+  correct: readonly OptionIndex[],
+): boolean {
   const a = normalizeSelection(selected);
   const b = normalizeSelection(correct);
-  return a.length === b.length && a.every((value, index) => value === b[index]);
+  return a.length > 0 && a.every((value) => b.includes(value));
 }
+
+export const CORRECT_POINTS = 3;
+export const INCORRECT_POINTS = -1;
 
 /**
  * Scores by stable question IDs, never by displayed position.
  * The denominator contains only known answer keys. Questions that are
  * unanswered, excluded, or unresolved are reported separately.
+ * Each correct answer is worth 3 points and each wrong answer deducts 1,
+ * so the overall percentage can be negative.
  */
 export function scoreExam(
   exam: Pick<ExamSnapshot, 'questions'>,
@@ -69,7 +82,7 @@ export function scoreExam(
       continue;
     }
 
-    if (isExactMatch(selected, correctKey)) {
+    if (isAcceptedSelection(selected, correctKey)) {
       correct += 1;
       perQuestion.push({
         questionId: question.id,
@@ -89,8 +102,11 @@ export function scoreExam(
   }
 
   const scoredQuestions = correct + incorrect + unanswered;
+  const points = correct * CORRECT_POINTS + incorrect * INCORRECT_POINTS;
   const percentage =
-    scoredQuestions > 0 ? Math.round((correct / scoredQuestions) * 1000) / 10 : null;
+    scoredQuestions > 0
+      ? Math.round((points / (scoredQuestions * CORRECT_POINTS)) * 1000) / 10
+      : null;
 
   return {
     totalQuestions: exam.questions.length,

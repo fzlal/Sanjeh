@@ -15,17 +15,17 @@ export function DialogContent({
 }: ComponentProps<typeof DialogPrimitive.Content> & { closeLabel?: string }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="animate-fade-in fixed inset-0 z-50 bg-black/45" />
+      <DialogPrimitive.Overlay className="animate-fade-in fixed inset-0 z-50 bg-black/25 backdrop-blur-[3px]" />
       <DialogPrimitive.Content
         className={cn(
-          'animate-dialog-in fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-surface-elevated p-6 shadow-lift',
+          'glass-strong animate-dialog-in fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[1.75rem] p-6',
           'max-h-[calc(100dvh-2rem)] overflow-y-auto',
           className,
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute end-4 top-4 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+        <DialogPrimitive.Close className="absolute end-4 top-4 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground">
           <X className="size-4" />
           <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>

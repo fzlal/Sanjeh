@@ -115,6 +115,8 @@ describe('version 2 to version 4 upgrade', () => {
       durationMinutes: 30,
     });
     expect(migrated?.booklets[0].pdfs[0].title).toBe('exam-v2');
+    expect(migrated?.booklets[0].pdfs[0].blob).toBeInstanceOf(Blob);
+    expect(migrated?.booklets[0].pdfs[0].size).toBe(14);
     expect(migrated?.answerPdfs[0].title).toBe('answers-v2');
 
     const mixed = exams.find((exam) => exam.id === 'exam-v3-shape');

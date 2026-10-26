@@ -1,6 +1,9 @@
 export const OPTION_INDICES = [1, 2, 3, 4] as const;
 export type OptionIndex = (typeof OPTION_INDICES)[number];
 
+export const ANSWER_KEY_MODES = ['qz1', 'manual', 'none'] as const;
+export type AnswerKeyMode = (typeof ANSWER_KEY_MODES)[number];
+
 export type AnswerKey =
   | { kind: 'known'; correct: OptionIndex[] }
   | { kind: 'unresolved' }
@@ -13,13 +16,21 @@ export interface Question {
 
 /** A PDF kept verbatim on this device so it can be downloaded again. */
 export interface StoredPdf {
+  /** Stable identity. The bytes behind an id can never be replaced. */
+  id: string;
   /** Editable label shown in the app; defaults to the file name without .pdf. */
   title: string;
   name: string;
   type: 'application/pdf';
   size: number;
-  /** Base64 data URL. Never uploaded, parsed, or rendered inside the app. */
-  data: string;
+  /** SHA-256 of the bytes when known; empty for records migrated from base64. */
+  digest: string;
+  /**
+   * Native PDF bytes while they are held by the web build. The desktop build
+   * streams bytes from its local file store on demand instead of keeping every
+   * PDF in memory.
+   */
+  blob?: Blob;
 }
 
 export type Scheduling =
@@ -46,6 +57,11 @@ export interface Exam {
   id: string;
   title: string;
   description?: string;
+  /**
+   * How this exam gets its correct options: one imported QZ1 key, a manually
+   * entered key, or no key at all (choices-only results).
+   */
+  answerKeyMode: AnswerKeyMode;
   answerPdfs: StoredPdf[];
   /** Ordered printed booklets; together they cover every question exactly once. */
   booklets: Booklet[];
@@ -60,6 +76,7 @@ export interface ExamSnapshot {
   id: string;
   title: string;
   description?: string;
+  answerKeyMode: AnswerKeyMode;
   questions: Question[];
   booklets: BookletSnapshot[];
   scheduling: Scheduling;
@@ -121,9 +138,10 @@ export interface Settings {
   onboardingComplete: boolean;
 }
 
+/** A validated, in-memory backup whose PDFs are native Blobs. */
 export interface BackupFile {
   format: 'sanjeh-backup';
-  version: 4;
+  version: 6;
   exportedAt: number;
   data: {
     exams: Exam[];

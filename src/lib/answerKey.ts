@@ -133,7 +133,7 @@ export function serializeAnswerKey(count: number, seed: number, tokens: AnswerKe
   ].join('|');
 }
 
-/** Builds the exact-set answer-key object from a list of option indices. */
+/** Builds an answer key from the accepted correct option indices. */
 export function knownKey(indices: OptionIndex[]): AnswerKey {
   const unique = Array.from(new Set(indices)).sort((a, b) => a - b);
   return { kind: 'known', correct: unique };
@@ -150,6 +150,17 @@ export function toggleCorrectOption(key: AnswerKey, option: OptionIndex): Answer
     return remaining.length > 0 ? knownKey(remaining) : { kind: 'unresolved' };
   }
   return knownKey([...current, option]);
+}
+
+/**
+ * Single-answer editing used by manual keys: picking an option replaces the
+ * current correct option, and picking the same option again leaves the
+ * question unresolved.
+ */
+export function chooseCorrectOption(key: AnswerKey, option: OptionIndex): AnswerKey {
+  const current = key.kind === 'known' ? key.correct : [];
+  if (current.length === 1 && current[0] === option) return { kind: 'unresolved' };
+  return knownKey([option]);
 }
 
 /** Excluded questions stay excluded until the user explicitly restores them. */

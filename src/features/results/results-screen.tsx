@@ -59,9 +59,9 @@ export function ResultsScreen({
 
   const persistKeyChange = async (next: ExamSession, questionId: string, key: AnswerKey) => {
     try {
-      await saveSession(next);
       const storedExam = await getExam(next.examId);
       if (storedExam) {
+        // saveExam re-scores every attempt for this exam, not just this one.
         await saveExam({
           ...storedExam,
           questions: storedExam.questions.map((question) =>
@@ -69,6 +69,8 @@ export function ResultsScreen({
           ),
           updatedAt: Date.now(),
         });
+      } else {
+        await saveSession(next);
       }
       onSessionUpdated?.();
     } catch {
@@ -108,10 +110,19 @@ export function ResultsScreen({
   }
 
   const result = session.result;
+  const keyless = session.exam.answerKeyMode === 'none';
   const timeUsed =
     session.submittedAt !== undefined ? session.submittedAt - session.startedAt : null;
   const reviewById = new Map(result.perQuestion.map((item) => [item.questionId, item]));
   const rows: AnswerSheetRow[] = session.exam.questions.map((question, index) => {
+    if (keyless) {
+      return {
+        id: question.id,
+        number: index + 1,
+        selected: reviewById.get(question.id)?.selected ?? [],
+        correct: null,
+      };
+    }
     const review = reviewById.get(question.id);
     const outcome: QuestionOutcome | undefined = review?.outcome;
     return {
@@ -124,15 +135,26 @@ export function ResultsScreen({
       outcome,
     };
   });
+  const answeredCount = rows.filter((row) => row.selected.length > 0).length;
 
-  const stats = [
-    { label: t('correctLabel'), value: result.correct, tone: 'text-correct' },
-    { label: t('incorrectLabel'), value: result.incorrect, tone: 'text-incorrect' },
-    { label: t('unansweredLabel'), value: result.unanswered, tone: 'text-unanswered' },
-    { label: t('excludedLabel'), value: result.excluded, tone: 'text-excluded' },
-    { label: t('unresolvedLabel'), value: result.unresolved, tone: 'text-muted-foreground' },
-    { label: t('totalLabel'), value: result.totalQuestions, tone: 'text-foreground' },
-  ];
+  const stats = keyless
+    ? [
+        { label: t('answered'), value: answeredCount, tone: 'text-primary' },
+        {
+          label: t('unansweredLabel'),
+          value: result.totalQuestions - answeredCount,
+          tone: 'text-muted-foreground',
+        },
+        { label: t('totalLabel'), value: result.totalQuestions, tone: 'text-foreground' },
+      ]
+    : [
+        { label: t('correctLabel'), value: result.correct, tone: 'text-correct' },
+        { label: t('incorrectLabel'), value: result.incorrect, tone: 'text-incorrect' },
+        { label: t('unansweredLabel'), value: result.unanswered, tone: 'text-unanswered' },
+        { label: t('excludedLabel'), value: result.excluded, tone: 'text-excluded' },
+        { label: t('unresolvedLabel'), value: result.unresolved, tone: 'text-muted-foreground' },
+        { label: t('totalLabel'), value: result.totalQuestions, tone: 'text-foreground' },
+      ];
 
   const takenAt = formatDateTime(result.completedAt, locale);
 
@@ -166,37 +188,67 @@ export function ResultsScreen({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <PdfDownloadButton
-                pdfs={exam?.booklets.flatMap((booklet) => booklet.pdfs) ?? []}
-                label={t('downloadExamPdf')}
-                disabled={!exam}
-              />
-            </div>
+            {exam && exam.booklets.some((booklet) => booklet.pdfs.length > 0) && (
+              <div className="flex flex-wrap items-center gap-2">
+                <PdfDownloadButton
+                  pdfs={exam.booklets.flatMap((booklet) => booklet.pdfs)}
+                  label={t('downloadExamPdf')}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col items-start sm:items-end">
-            <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              {t('scoreLabel')}
-            </span>
-            <span className="animate-pop-in tnum text-4xl font-semibold leading-tight text-primary sm:text-5xl">
-              {formatPercent(result.percentage, locale)}
-            </span>
-            <span className="tnum text-xs text-muted-foreground">
-              {formatNumber(result.correct, locale)} /{' '}
-              {formatNumber(result.scoredQuestions, locale)}
-            </span>
-          </div>
+          {keyless ? (
+            <div className="flex flex-col items-start sm:items-end">
+              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {t('scoreLabel')}
+              </span>
+              <span className="tnum text-2xl font-semibold leading-tight text-muted-foreground sm:text-3xl">
+                {t('noScoreShort')}
+              </span>
+              <span className="tnum text-xs text-muted-foreground">
+                {t('answered')} · {formatNumber(answeredCount, locale)} /{' '}
+                {formatNumber(result.totalQuestions, locale)}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-start sm:items-end">
+              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {t('scoreLabel')}
+              </span>
+              <span
+                className={cn(
+                  'animate-pop-in tnum text-4xl font-semibold leading-tight sm:text-5xl',
+                  result.percentage !== null && result.percentage < 0
+                    ? 'text-incorrect'
+                    : 'text-primary',
+                )}
+              >
+                {formatPercent(result.percentage, locale)}
+              </span>
+              <span className="tnum text-xs text-muted-foreground">
+                {formatNumber(result.correct, locale)} /{' '}
+                {formatNumber(result.scoredQuestions, locale)}
+              </span>
+            </div>
+          )}
         </div>
         <p className="border-t border-border bg-background/60 px-5 py-3 text-[11px] leading-relaxed text-muted-foreground sm:px-7">
-          {t('denominatorNote', {
-            scored: formatNumber(result.scoredQuestions, locale),
-            total: formatNumber(result.totalQuestions, locale),
-          })}
+          {keyless
+            ? t('noKeyResultsNote')
+            : t('denominatorNote', {
+                scored: formatNumber(result.scoredQuestions, locale),
+                total: formatNumber(result.totalQuestions, locale),
+              })}
         </p>
       </Card>
 
-      <div className="stagger mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div
+        className={cn(
+          'stagger mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3',
+          !keyless && 'lg:grid-cols-6',
+        )}
+      >
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -212,42 +264,37 @@ export function ResultsScreen({
 
       <AnswerSheet
         rows={rows}
-        variant="review"
+        variant={keyless ? 'selected' : 'review'}
         subtitle={t('answerSheetExam', { date: takenAt })}
         action={
-          <PdfDownloadButton
-            pdfs={exam?.answerPdfs ?? []}
-            label={t('downloadAnswerPdf')}
-            disabled={!exam}
-          />
+          exam && exam.answerPdfs.length > 0 ? (
+            <PdfDownloadButton
+              pdfs={exam.answerPdfs}
+              label={t('downloadAnswerPdf')}
+            />
+          ) : undefined
         }
       />
 
-      <div className="mt-6">
-        <KeySheetAccordion
-          count={session.exam.questions.length}
-          title={t('editKeyTitle')}
-          subtitle={t('editKeyHint')}
-          closedHint={t('editKeyClosedHint')}
-        >
-          <div className="flex flex-col gap-2 border-b border-border bg-background/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground sm:px-4">
-            {t('keyEditorHint')}
-          </div>          <AnswerKeyEditor
-            items={session.exam.questions.map((question) => ({
-              id: question.id,
-              key: question.key,
-            }))}
-            onChange={updateKey}
-          />
-        </KeySheetAccordion>
-      </div>
-
-      <div className="mt-8 flex justify-center">
-        <Button variant="outline" onClick={onBack}>
-          <BackIcon className="size-4" aria-hidden="true" />
-          {t('backToDashboard')}
-        </Button>
-      </div>
+      {!keyless && (
+        <div className="mt-6">
+          <KeySheetAccordion
+            count={session.exam.questions.length}
+            title={t('editKeyTitle')}
+            subtitle={t('editKeyHint')}
+            closedHint={t('editKeyClosedHint')}
+          >
+            <AnswerKeyEditor
+              items={session.exam.questions.map((question) => ({
+                id: question.id,
+                key: question.key,
+              }))}
+              onChange={updateKey}
+              single={session.exam.answerKeyMode === 'manual'}
+            />
+          </KeySheetAccordion>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,9 +5,9 @@ import {
   FileReadError,
   MAX_PDFS_PER_GROUP,
   defaultPdfTitle,
-  downloadPdf,
   readPdfFile,
 } from '@/lib/file';
+import { downloadPdf } from '@/storage/downloads';
 import { formatBytes, formatNumber } from '@/lib/format';
 import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ export function PdfGroupEditor({
   embedded = false,
 }: {
   title: string;
-  hint: string;
+  hint?: string;
   icon: ReactNode;
   pdfs: StoredPdf[];
   onChange: (pdfs: StoredPdf[]) => void;
@@ -71,8 +71,8 @@ export function PdfGroupEditor({
     }
   };
 
-  const download = (pdf: StoredPdf) => {
-    if (!downloadPdf(pdf)) notify(t('downloadFailed'), 'error');
+  const download = async (pdf: StoredPdf) => {
+    if (!(await downloadPdf(pdf))) notify(t('downloadFailed'), 'error');
   };
 
   const rename = (index: number, value: string) => {
@@ -109,7 +109,9 @@ export function PdfGroupEditor({
               {t('pdfCount', { count: formatNumber(pdfs.length, locale) })}
             </span>
           </div>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>
+          {hint && (
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>
+          )}
         </div>
       </div>
 
@@ -147,7 +149,7 @@ export function PdfGroupEditor({
                   size="icon-sm"
                   aria-label={`${t('download')} ${pdf.title}`}
                   title={t('download')}
-                  onClick={() => download(pdf)}
+                  onClick={() => void download(pdf)}
                 >
                   <Download className="size-4 text-muted-foreground" aria-hidden="true" />
                 </Button>

@@ -1,5 +1,6 @@
 import type {
   AnswerKey,
+  AnswerKeyMode,
   BackupFile,
   Booklet,
   BookletSnapshot,
@@ -14,9 +15,22 @@ import type {
   Settings,
   StoredPdf,
 } from '@/types';
+import { ANSWER_KEY_MODES } from '@/types';
 import { isLanguageCode } from '@/i18n/languages';
-import { MAX_PDFS_PER_GROUP, PDF_MAX_BYTES, defaultPdfTitle } from '@/lib/file';
+import {
+  MAX_PDFS_PER_GROUP,
+  PDF_DATA_PREFIX,
+  PDF_MAX_BYTES,
+  PDF_MIME,
+  base64ToBytes,
+  defaultPdfTitle,
+  sha256Hex,
+} from '@/lib/file';
+import { createId } from '@/lib/id';
+import { rescoreSubmittedSession } from '@/lib/session';
+import { createZip, looksLikeZip, readZip } from '@/lib/zip';
 import { isThemeId } from '@/themes';
+import { pdfBlob } from './downloads';
 
 export class BackupValidationError extends Error {
   constructor(message: string) {
@@ -30,8 +44,8 @@ const MAX_BOOKLETS = 50;
 const MAX_QUESTIONS = 500;
 const MAX_SESSIONS = 2000;
 const MAX_TEXT = 20_000;
+const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
 const MAX_PDF_DATA = Math.ceil(PDF_MAX_BYTES / 3) * 4 + 64;
-const PDF_DATA_PREFIX = 'data:application/pdf;base64,';
 
 const OUTCOMES: readonly QuestionOutcome[] = [
   'correct',
@@ -40,6 +54,33 @@ const OUTCOMES: readonly QuestionOutcome[] = [
   'excluded',
   'unresolved',
 ];
+
+type PdfFiles = Map<string, Uint8Array>;
+
+interface PdfMeta extends Omit<StoredPdf, 'blob'> {
+  /** Archive path inside a version-6 ZIP backup. */
+  file: string;
+}
+
+interface SerializedBooklet extends Omit<Booklet, 'pdfs'> {
+  pdfs: PdfMeta[];
+}
+
+interface SerializedExam extends Omit<Exam, 'booklets' | 'answerPdfs'> {
+  booklets: SerializedBooklet[];
+  answerPdfs: PdfMeta[];
+}
+
+interface BackupManifest {
+  format: 'sanjeh-backup';
+  version: 6;
+  exportedAt: number;
+  data: {
+    exams: SerializedExam[];
+    sessions: ExamSession[];
+    settings: Settings;
+  };
+}
 
 function fail(path: string, detail: string): never {
   throw new BackupValidationError(`${path}: ${detail}`);
@@ -90,6 +131,12 @@ function asOptionList(value: unknown, path: string, allowEmpty: boolean): Option
   return result.sort((a, b) => a - b);
 }
 
+function asAnswerKeyMode(value: unknown, path: string): AnswerKeyMode {
+  if (value === undefined) return 'qz1';
+  if (ANSWER_KEY_MODES.includes(value as AnswerKeyMode)) return value as AnswerKeyMode;
+  return fail(path, 'unknown answer-key mode');
+}
+
 function asAnswerKey(value: unknown, path: string): AnswerKey {
   const record = asRecord(value, path);
   const kind = record.kind;
@@ -126,34 +173,88 @@ function asQuestions(record: Record<string, unknown>, path: string): Question[] 
   return questions;
 }
 
-function asPdfFields(record: Record<string, unknown>, path: string) {
-  const name = asString(record.name, `${path}.name`, 300);
-  if (!name) fail(`${path}.name`, 'name is empty');
-  if (record.type !== 'application/pdf') fail(`${path}.type`, 'expected application/pdf');
+async function pdfBytes(
+  record: Record<string, unknown>,
+  path: string,
+  files: PdfFiles | undefined,
+): Promise<{ bytes: Uint8Array; size: number }> {
   const size = asInteger(record.size, `${path}.size`, 1, PDF_MAX_BYTES);
+  if (files) {
+    const file = asString(record.file, `${path}.file`, 500).trim();
+    if (!file) fail(`${path}.file`, 'file is empty');
+    const bytes = files.get(file);
+    if (!bytes) fail(`${path}.file`, 'the PDF is missing from the archive');
+    if (bytes.byteLength !== size) fail(`${path}.file`, 'size does not match the PDF data');
+    return { bytes, size };
+  }
   const data = asString(record.data, `${path}.data`, MAX_PDF_DATA);
   if (!data.startsWith(PDF_DATA_PREFIX)) fail(`${path}.data`, 'expected PDF base64 data');
-  return { name, type: 'application/pdf' as const, size, data };
+  try {
+    const bytes = base64ToBytes(data.slice(PDF_DATA_PREFIX.length));
+    if (bytes.byteLength !== size) fail(`${path}.data`, 'size does not match the PDF data');
+    return { bytes, size };
+  } catch (error) {
+    if (error instanceof BackupValidationError) throw error;
+    fail(`${path}.data`, 'expected PDF base64 data');
+  }
 }
 
-function asStoredPdf(value: unknown, path: string): StoredPdf {
+async function asPdfFields(
+  record: Record<string, unknown>,
+  path: string,
+  files: PdfFiles | undefined,
+): Promise<Omit<StoredPdf, 'title'>> {
+  const name = asString(record.name, `${path}.name`, 300);
+  if (!name) fail(`${path}.name`, 'name is empty');
+  if (record.type !== PDF_MIME) fail(`${path}.type`, 'expected application/pdf');
+  const { bytes, size } = await pdfBytes(record, path, files);
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  const blob = new Blob([copy], { type: PDF_MIME });
+  const digest = await sha256Hex(blob);
+  const declaredDigest =
+    record.digest === undefined ? '' : asString(record.digest, `${path}.digest`, 128);
+  if (declaredDigest && digest && declaredDigest !== digest) {
+    fail(`${path}.digest`, 'digest mismatch');
+  }
+  const id =
+    record.id === undefined ? createId() : asString(record.id, `${path}.id`, 200);
+  if (!id) fail(`${path}.id`, 'id is empty');
+  return {
+    id,
+    name,
+    type: 'application/pdf' as const,
+    size,
+    digest: digest || declaredDigest,
+    blob,
+  };
+}
+
+async function asStoredPdf(
+  value: unknown,
+  path: string,
+  files: PdfFiles | undefined,
+): Promise<StoredPdf> {
   const record = asRecord(value, path);
   const title = asString(record.title, `${path}.title`, 300).trim();
   if (!title) fail(`${path}.title`, 'title is empty');
-  return { ...asPdfFields(record, path), title };
+  return { ...(await asPdfFields(record, path, files)), title };
 }
 
 /** Version-2 backups had one untitled PDF per booklet. */
-function asLegacyStoredPdf(value: unknown, path: string): StoredPdf {
-  const fields = asPdfFields(asRecord(value, path), path);
+async function asLegacyStoredPdf(value: unknown, path: string): Promise<StoredPdf> {
+  const fields = await asPdfFields(asRecord(value, path), path, undefined);
   return { ...fields, title: defaultPdfTitle(fields.name) };
 }
 
-function asPdfList(value: unknown, path: string): StoredPdf[] {
+async function asPdfList(
+  value: unknown,
+  path: string,
+  files: PdfFiles | undefined,
+): Promise<StoredPdf[]> {
   if (!Array.isArray(value)) fail(path, 'expected an array');
-  if (value.length === 0) fail(path, 'expected at least one PDF');
   if (value.length > MAX_PDFS_PER_GROUP) fail(path, 'too many PDFs');
-  return value.map((pdf, index) => asStoredPdf(pdf, `${path}[${index}]`));
+  return Promise.all(value.map((pdf, index) => asStoredPdf(pdf, `${path}[${index}]`, files)));
 }
 
 function asBookletSnapshot(value: unknown, path: string): BookletSnapshot {
@@ -183,19 +284,29 @@ function asBookletSnapshots(value: unknown, path: string): BookletSnapshot[] {
   return booklets;
 }
 
-function asBooklet(value: unknown, path: string): Booklet {
+async function asBooklet(
+  value: unknown,
+  path: string,
+  files: PdfFiles | undefined,
+): Promise<Booklet> {
   const record = asRecord(value, path);
   return {
     ...asBookletSnapshot(record, path),
-    pdfs: asPdfList(record.pdfs, `${path}.pdfs`),
+    pdfs: await asPdfList(record.pdfs, `${path}.pdfs`, files),
   };
 }
 
-function asBooklets(value: unknown, path: string): Booklet[] {
+async function asBooklets(
+  value: unknown,
+  path: string,
+  files: PdfFiles | undefined,
+): Promise<Booklet[]> {
   if (!Array.isArray(value)) fail(path, 'expected an array');
   if (value.length === 0) fail(path, 'expected at least one booklet');
   if (value.length > MAX_BOOKLETS) fail(path, 'too many booklets');
-  const booklets = value.map((booklet, index) => asBooklet(booklet, `${path}[${index}]`));
+  const booklets = await Promise.all(
+    value.map((booklet, index) => asBooklet(booklet, `${path}[${index}]`, files)),
+  );
   const ids = new Set<string>();
   for (const booklet of booklets) {
     if (ids.has(booklet.id)) fail(path, 'duplicate booklet id');
@@ -260,6 +371,7 @@ function asCoreExam(
   const exam: ExamSnapshot = {
     id: asString(record.id, `${path}.id`, 200),
     title: asString(record.title, `${path}.title`, 500),
+    answerKeyMode: asAnswerKeyMode(record.answerKeyMode, `${path}.answerKeyMode`),
     questions,
     booklets,
     scheduling: asScheduling(record.scheduling, `${path}.scheduling`),
@@ -273,19 +385,24 @@ function asCoreExam(
   return exam;
 }
 
-function asExam(value: unknown, path: string, version: number): Exam {
+async function asExam(
+  value: unknown,
+  path: string,
+  version: number,
+  files: PdfFiles | undefined,
+): Promise<Exam> {
   const record = asRecord(value, path);
   const questions = asQuestions(record, path);
   if (version < 4) {
     const duration = legacyDuration(record, path);
     const examPdfs =
       version === 2
-        ? [asLegacyStoredPdf(record.examPdf, `${path}.examPdf`)]
-        : asPdfList(record.examPdfs, `${path}.examPdfs`);
+        ? [await asLegacyStoredPdf(record.examPdf, `${path}.examPdf`)]
+        : await asPdfList(record.examPdfs, `${path}.examPdfs`, undefined);
     const answerPdfs =
       version === 2
-        ? [asLegacyStoredPdf(record.answerPdf, `${path}.answerPdf`)]
-        : asPdfList(record.answerPdfs, `${path}.answerPdfs`);
+        ? [await asLegacyStoredPdf(record.answerPdf, `${path}.answerPdf`)]
+        : await asPdfList(record.answerPdfs, `${path}.answerPdfs`, undefined);
     const booklets: Booklet[] = [
       {
         ...legacyBooklet(questions, duration),
@@ -298,8 +415,9 @@ function asExam(value: unknown, path: string, version: number): Exam {
       answerPdfs,
     };
   }
-  const booklets = asBooklets(record.booklets, `${path}.booklets`);
-  return {
+  const booklets = await asBooklets(record.booklets, `${path}.booklets`, files);
+  const answerPdfs = await asPdfList(record.answerPdfs, `${path}.answerPdfs`, files);
+  const exam: Exam = {
     ...asCoreExam(
       record,
       path,
@@ -312,8 +430,14 @@ function asExam(value: unknown, path: string, version: number): Exam {
       })),
     ),
     booklets,
-    answerPdfs: asPdfList(record.answerPdfs, `${path}.answerPdfs`),
+    answerPdfs,
   };
+  const pdfIds = new Set<string>();
+  for (const pdf of [...answerPdfs, ...booklets.flatMap((booklet) => booklet.pdfs)]) {
+    if (pdfIds.has(pdf.id)) fail(`${path}.pdfs`, 'duplicate PDF id');
+    pdfIds.add(pdf.id);
+  }
+  return exam;
 }
 
 function asExamSnapshot(value: unknown, path: string, version: number): ExamSnapshot {
@@ -419,7 +543,7 @@ function asSession(value: unknown, path: string, version: number): ExamSession {
   if (session.status === 'submitted' && !session.result) {
     fail(`${path}.result`, 'submitted sessions require a result');
   }
-  return session;
+  return rescoreSubmittedSession(session);
 }
 
 export function asSettings(value: unknown, path = 'settings'): Settings {
@@ -439,12 +563,19 @@ export function asSettings(value: unknown, path = 'settings'): Settings {
   };
 }
 
-export function validateBackup(value: unknown): BackupFile {
+export async function validateBackup(
+  value: unknown,
+  options: { files?: PdfFiles } = {},
+): Promise<BackupFile> {
   const record = asRecord(value, 'backup');
   if (record.format !== 'sanjeh-backup') fail('backup.format', 'not a SANJEH backup');
   const version = record.version;
-  if (version !== 2 && version !== 3 && version !== 4) {
+  if (version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6) {
     fail('backup.version', 'unsupported backup version');
+  }
+  const files = options.files;
+  if (version === 6 && !files) {
+    fail('backup', 'version 6 backups must be read from a ZIP archive');
   }
   asFiniteNumber(record.exportedAt, 'backup.exportedAt');
   const data = asRecord(record.data, 'backup.data');
@@ -454,8 +585,10 @@ export function validateBackup(value: unknown): BackupFile {
   if (!Array.isArray(sessionsValue)) fail('backup.data.sessions', 'expected an array');
   if (examsValue.length > MAX_EXAMS) fail('backup.data.exams', 'too many exams');
   if (sessionsValue.length > MAX_SESSIONS) fail('backup.data.sessions', 'too many sessions');
-  const exams = examsValue.map((exam, index) =>
-    asExam(exam, `backup.data.exams[${index}]`, version),
+  const exams = await Promise.all(
+    examsValue.map((exam, index) =>
+      asExam(exam, `backup.data.exams[${index}]`, version, files),
+    ),
   );
   const examIds = new Set<string>();
   for (const exam of exams) {
@@ -467,7 +600,7 @@ export function validateBackup(value: unknown): BackupFile {
   );
   return {
     format: 'sanjeh-backup',
-    version: 4,
+    version: 6,
     exportedAt: record.exportedAt as number,
     data: {
       exams,
@@ -477,32 +610,131 @@ export function validateBackup(value: unknown): BackupFile {
   };
 }
 
-export function parseBackupFile(text: string): BackupFile {
+export type BackupInput = string | Blob | ArrayBuffer | Uint8Array;
+
+async function inputBytes(input: BackupInput): Promise<Uint8Array | null> {
+  if (typeof input === 'string') return null;
+  if (input instanceof Uint8Array) return input;
+  if (input instanceof ArrayBuffer) return new Uint8Array(input);
+  return new Uint8Array(await input.arrayBuffer());
+}
+
+export async function parseBackupFile(input: BackupInput): Promise<BackupFile> {
+  const bytes = await inputBytes(input);
+  if (bytes && looksLikeZip(bytes)) {
+    let files: PdfFiles;
+    try {
+      files = readZip(bytes).entries;
+    } catch (error) {
+      throw new BackupValidationError(
+        error instanceof Error ? error.message : 'backup: invalid ZIP archive',
+      );
+    }
+    const manifest = files.get('manifest.json');
+    if (!manifest) throw new BackupValidationError('backup: manifest.json is missing');
+    if (manifest.byteLength > MAX_MANIFEST_BYTES) {
+      throw new BackupValidationError('backup: manifest.json is too large');
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder().decode(manifest));
+    } catch {
+      throw new BackupValidationError('backup: invalid JSON');
+    }
+    return validateBackup(parsed, { files });
+  }
+  let text: string;
+  if (typeof input === 'string') text = input;
+  else if (bytes) text = new TextDecoder().decode(bytes);
+  else throw new BackupValidationError('backup: unreadable file');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
   } catch {
     throw new BackupValidationError('backup: invalid JSON');
   }
   return validateBackup(parsed);
 }
 
-export function createBackup(
+function pdfMeta(pdf: StoredPdf, file: string): PdfMeta {
+  return {
+    id: pdf.id,
+    title: pdf.title,
+    name: pdf.name,
+    type: pdf.type,
+    size: pdf.size,
+    digest: pdf.digest,
+    file,
+  };
+}
+
+/** Builds a clean ZIP: a JSON manifest plus one raw PDF per stored file. */
+export async function createBackup(
   exams: Exam[],
   sessions: ExamSession[],
   settings: Settings,
-): BackupFile {
-  return {
-    format: 'sanjeh-backup',
-    version: 4,
-    exportedAt: Date.now(),
-    data: { exams, sessions, settings },
+): Promise<Blob> {
+  const files: { name: string; data: Uint8Array }[] = [];
+  const fileById = new Map<string, string>();
+  const digestById = new Map<string, string>();
+
+  const ensurePdf = async (pdf: StoredPdf): Promise<PdfMeta> => {
+    let path = fileById.get(pdf.id);
+    let digest = pdf.digest || digestById.get(pdf.id) || '';
+    if (!path) {
+      const blob = await pdfBlob(pdf);
+      if (!blob) throw new Error(`The bytes for PDF ${pdf.id} are missing.`);
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (bytes.byteLength === 0 || bytes.byteLength > PDF_MAX_BYTES) {
+        throw new Error(`PDF ${pdf.id} has an invalid size.`);
+      }
+      if (!digest) {
+        digest = await sha256Hex(blob);
+        if (!digest) throw new Error(`PDF ${pdf.id} could not be verified.`);
+      }
+      digestById.set(pdf.id, digest);
+      path = `pdfs/${String(files.length + 1).padStart(5, '0')}.pdf`;
+      fileById.set(pdf.id, path);
+      files.push({ name: path, data: bytes });
+    }
+    return pdfMeta({ ...pdf, digest }, path);
   };
+
+  const serializedExams: SerializedExam[] = [];
+  for (const exam of exams) {
+    const answerPdfs = await Promise.all(exam.answerPdfs.map(ensurePdf));
+    const booklets = await Promise.all(
+      exam.booklets.map(async (booklet) => ({
+        ...booklet,
+        pdfs: await Promise.all(booklet.pdfs.map(ensurePdf)),
+      })),
+    );
+    serializedExams.push({ ...exam, answerPdfs, booklets });
+  }
+
+  const manifest: BackupManifest = {
+    format: 'sanjeh-backup',
+    version: 6,
+    exportedAt: Date.now(),
+    data: {
+      exams: serializedExams,
+      sessions: structuredClone(sessions),
+      settings: structuredClone(settings),
+    },
+  };
+  const archive = createZip([
+    {
+      name: 'manifest.json',
+      data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
+    },
+    ...files,
+  ]);
+  return new Blob([archive], { type: 'application/zip' });
 }
 
 export function backupFileName(now = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `sanjeh-backup-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(
     now.getHours(),
-  )}${pad(now.getMinutes())}.json`;
+  )}${pad(now.getMinutes())}.zip`;
 }

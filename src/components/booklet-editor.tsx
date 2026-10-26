@@ -147,7 +147,6 @@ export function BookletEditor({
               <PdfGroupEditor
                 embedded
                 title={t('bookletPdfs')}
-                hint={t('bookletFilesHint')}
                 icon={<FileText className="size-5" aria-hidden="true" />}
                 pdfs={booklet.pdfs}
                 onChange={(pdfs) => update(booklet.id, { pdfs })}

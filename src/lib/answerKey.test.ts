@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   answerKeyToToken,
+  chooseCorrectOption,
   countUnresolved,
   parseAnswerKey,
   serializeAnswerKey,
@@ -122,6 +123,28 @@ describe('editing answer keys', () => {
     expect(toggleCorrectOption({ kind: 'excluded' }, 3)).toEqual({
       kind: 'known',
       correct: [3],
+    });
+  });
+
+  it('replaces the correct option when editing a single-answer manual key', () => {
+    expect(chooseCorrectOption({ kind: 'known', correct: [2] }, 4)).toEqual({
+      kind: 'known',
+      correct: [4],
+    });
+    expect(chooseCorrectOption({ kind: 'known', correct: [1, 3] }, 2)).toEqual({
+      kind: 'known',
+      correct: [2],
+    });
+    expect(chooseCorrectOption({ kind: 'known', correct: [2] }, 2)).toEqual({
+      kind: 'unresolved',
+    });
+    expect(chooseCorrectOption({ kind: 'unresolved' }, 3)).toEqual({
+      kind: 'known',
+      correct: [3],
+    });
+    expect(chooseCorrectOption({ kind: 'excluded' }, 1)).toEqual({
+      kind: 'known',
+      correct: [1],
     });
   });
 

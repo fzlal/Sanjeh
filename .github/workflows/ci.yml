@@ -51,6 +51,7 @@ jobs:
           curl -fsS http://127.0.0.1:4173/ > /dev/null
           curl -fsS http://127.0.0.1:4173/manifest.webmanifest > /dev/null
           curl -fsS http://127.0.0.1:4173/sw.js > /dev/null
+          curl -fsS http://127.0.0.1:4173/precache-manifest.js > /dev/null
           curl -fsS http://127.0.0.1:4173/fonts/Vazirmatn-Variable.woff2 > /dev/null
 
       - name: Upload web bundle

@@ -53,7 +53,7 @@ export const en = {
   yourExams: 'Your exams',
   emptyExamsTitle: 'No exams yet',
   emptyExamsDesc:
-    'Import the exam PDF, the descriptive answer PDF, and the QZ1 answer key. Everything stays on this device.',
+    'Create an exam, choose how its answer key works, and pick a schedule. PDFs are optional and everything stays on this device.',
   createFirstExam: 'Create your first exam',
   recentResults: 'Recent results',
   emptyResults: 'Completed exams will appear here.',
@@ -63,6 +63,7 @@ export const en = {
   inProgress: 'In progress',
   completed: 'Completed',
   untimed: 'No time limit',
+  startsIn: 'Starts in',
   searchPlaceholder: 'Search exams…',
   noSearchResults: 'No exams match your search.',
   deleteExamTitle: 'Delete this exam?',
@@ -97,14 +98,36 @@ export const en = {
   bookletPdfs: 'Booklet files',
   bookletFilesHint: 'Each booklet keeps its own PDFs on this device.',
   validationBooklets: 'Add at least one booklet.',
-  validationBookletPdf: 'Add at least one PDF for every booklet.',
   validationBookletCounts:
     'The booklets must cover exactly {total} questions (currently {assigned}).',
   validationBookletQuestionCount: 'Every booklet needs at least one question.',
   validationBookletDuration: 'Booklet time must be zero or a whole number of minutes.',
   totalDurationLabel: 'Total booklet time',
   answerBooklet: 'Descriptive answer booklet (PDF)',
-  answerBookletHint: 'The external AI reads this PDF to produce the QZ1 answer key.',
+  answerBookletHint: 'If you add an answer PDF, the external AI reads it to produce the QZ1 key.',
+  answerBookletManualHint: 'Kept only for later download; it is not used to build the key.',
+  answerKeyMode: 'Answer-key mode',
+  answerKeyModeHint:
+    'Choose how correct options are supplied. This is fixed after the exam is created.',
+  keyModeQz1: 'AI answer key',
+  keyModeQz1Desc: 'Get one QZ1 line from an external AI and import it.',
+  keyModeManual: 'Manual answer key',
+  keyModeManualDesc:
+    'Enter the correct option of every question yourself. No AI or key file is needed.',
+  keyModeNone: 'No answer key',
+  keyModeNoneDesc:
+    'After the exam, only your selected options are shown. No score is calculated.',
+  manualKeyTitle: 'Manual answer key',
+  manualKeyDesc:
+    'The booklets define the question count. Choose the correct option for every question.',
+  manualKeyPreviewSubtitle: 'Entered by hand; no external AI.',
+  manualKeyEmpty: 'Set the question counts in the booklets to start entering the key.',
+  manualKeyReady: 'Every question has an answer.',
+  noKeyExamNote:
+    'No key is stored for this exam. After the exam, only the selected options are shown.',
+  noKeyResultsNote:
+    'This exam has no answer key, so only your selected options are shown. No score is calculated.',
+  noScoreShort: 'No score',
   questionsSection: 'Questions',
   questionNumber: 'Question {n}',
   optionLabel: 'Option {n}',
@@ -115,7 +138,9 @@ export const en = {
   keySheetHiddenHint: 'Collapsed so the answers are not spoiled before the exam.',
   keyEditorLabel: 'Edit the correct answers',
   keyEditorHint:
-    'Choose the correct option for each question; multiple correct options are allowed. “?” marks an unresolved answer that you must resolve, and “-” marks an excluded question.',
+    'Choose the correct option for each question; multiple correct options are allowed, and the student gets the question right by choosing any one of them. “?” marks an unresolved answer that you must resolve, and “-” marks an excluded question.',
+  manualKeyEditorHint:
+    'Choose the correct option for each question; choosing another option replaces the previous one. Use “-” to exclude a question.',
   needsAnswer: 'Choose an option',
   excludeQuestion: 'Exclude question',
   restoreQuestion: 'Restore question',
@@ -136,6 +161,7 @@ export const en = {
   durationLabel: 'Duration (minutes)',
   noTimeLimit: 'No time limit',
   scheduling: 'Scheduling',
+  scheduleMode: 'Schedule mode',
   scheduleImmediate: 'Start immediately',
   scheduleStart: 'Scheduled start',
   scheduleWindow: 'Fixed availability window',
@@ -150,6 +176,14 @@ export const en = {
   validationSchedule: 'Complete the schedule dates and times.',
   validationWindow: 'The end must be after the start.',
   localTimeNote: "Times use this device's local timezone.",
+  dateTimeTitle: 'Date and time',
+  chooseDateTime: 'Choose date and time',
+  selectDate: 'Select a date',
+  today: 'Today',
+  previousMonth: 'Previous month',
+  nextMonth: 'Next month',
+  hour: 'Hour',
+  minute: 'Minute',
   replacePdf: 'Replace PDF',
   addPdf: 'Add PDF',
   removePdf: 'Remove PDF',
@@ -158,8 +192,6 @@ export const en = {
   pdfCount: '{count} files',
   pdfLimit: 'Up to {max} files per section.',
   pdfEmpty: 'No PDF has been added yet.',
-  validationExamPdf: 'Add at least one PDF for the exam booklet.',
-  validationAnswerPdf: 'Add at least one PDF for the answer booklet.',
   pdfOnly: 'Choose a readable PDF file.',
   pdfStoredNote: 'PDFs are stored only on this device.',
   noTextNote: 'Question text is never displayed in this app.',
@@ -206,17 +238,17 @@ export const en = {
   unresolvedLabel: 'Unresolved',
   totalLabel: 'Total',
   denominatorNote:
-    'Scored on {scored} of {total} questions. Excluded and unresolved questions do not affect the score.',
+    'Scored on {scored} of {total} questions; every correct answer earns 3 points and every wrong answer deducts 1, so the percentage can be negative. When several options are correct, choosing any one of them is enough. Excluded and unresolved questions do not affect the score.',
   backToDashboard: 'Back to dashboard',
   takenAt: 'Completed {date}',
   timeUsed: 'Time used {duration}',
 
   importTitle: 'Import answer key',
   importDesc:
-    'SANJEH does not read PDFs or display question text. Attach the descriptive answer PDF in an external AI chat, then paste or upload the compact QZ1 result here.',
+    'Get the QZ1 answer key from an external AI chat and import it here. SANJEH does not read PDFs or show question text.',
   answerKeyPromptTitle: 'Build QZ1 from the answer PDF',
   answerKeyPromptDesc:
-    'Attach the descriptive answer PDF in the chat, then send this prompt. The AI converts only that PDF into one QZ1 line.',
+    'If you have a descriptive answer PDF, attach it in the chat, then send this prompt. The AI converts only that PDF into one QZ1 line.',
   singleKeyNote:
     'Each exam has exactly one QZ1 answer key. The same line covers every uploaded PDF.',
   copyPrompt: 'Copy prompt',
@@ -248,9 +280,9 @@ export const en = {
   exportBackup: 'Export backup',
   importBackup: 'Import backup',
   backupNote:
-    'Exports a backup file with your exams, sessions, preferences, and stored PDFs. Keep it somewhere safe.',
+    'Exports a ZIP with your exams, sessions, preferences, and the original PDF files. Keep it somewhere safe.',
   storageNotice:
-    "Data lives in this browser's storage. Clearing browser data, using private windows, or the operating system may delete it. Keep a backup.",
+    "On desktop, data and PDFs are stored in the app's data folder on this device; the web build uses browser IndexedDB. Keep a ZIP backup to be safe.",
   importDataConfirm:
     'Importing a backup replaces all exams, results, preferences, and stored PDFs on this device. Continue?',
   importDataSuccess: 'Backup imported.',
@@ -278,6 +310,8 @@ export const en = {
   examNotStarted: 'This exam is not available yet.',
   examEnded: 'This exam is no longer available.',
   storageUnavailable: 'Local storage is unavailable. Changes may not be saved.',
+  pdfImmutableError:
+    'A stored PDF cannot be replaced. Remove the old file and add the new one instead.',
   notFound: 'We couldn’t find that item.',
   genericError: 'Something went wrong.',
 
@@ -302,7 +336,7 @@ export const en = {
 
   importExamTitle: 'Import a new exam',
   importExamDesc:
-    'Upload the exam PDF and the descriptive answer PDF, then add the QZ1 answer key. Files are stored on this device and never uploaded.',
+    'Choose how the answer key works, then add the exam and answer PDFs if needed. Everything stays on this device.',
   chooseFile: 'Choose file',
   filesLocalNote: 'Files are stored on this device and never uploaded.',
   fileTooLarge: 'The file is too large.',

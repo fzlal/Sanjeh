@@ -86,7 +86,12 @@ describe('version 3 to version 4 upgrade', () => {
       questionCount: 3,
       durationMinutes: 40,
     });
-    expect(exam.booklets[0].pdfs[0].title).toBe('Booklet A');
+    const pdf = exam.booklets[0].pdfs[0];
+    expect(pdf.title).toBe('Booklet A');
+    expect(pdf).not.toHaveProperty('data');
+    expect(pdf.blob).toBeInstanceOf(Blob);
+    expect(pdf.size).toBe(14);
+    expect(pdf.id).toBeTruthy();
     expect(exam.answerPdfs[0].title).toBe('Key');
 
     const [session] = await loadSessions();

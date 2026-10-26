@@ -1,18 +1,23 @@
 /* SANJEH offline shell. No network data is ever uploaded or cached. */
-const VERSION = 'sanjeh-v1';
+importScripts('./precache-manifest.js');
+
+const VERSION = 'sanjeh-v2';
 const SHELL_CACHE = `${VERSION}-shell`;
 const ASSET_CACHE = `${VERSION}-assets`;
+// The build may be served from the origin root or a subpath such as /Sanjeh/.
+const BASE = new URL('./', self.location.href).pathname;
 
 const SHELL_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/fonts/Vazirmatn-Variable.woff2',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/icon-maskable-512.png',
-  '/icons/icon-180.png',
-  '/icons/favicon.svg',
+  BASE,
+  `${BASE}index.html`,
+  `${BASE}manifest.webmanifest`,
+  `${BASE}fonts/Vazirmatn-Variable.woff2`,
+  `${BASE}icons/icon-192.png`,
+  `${BASE}icons/icon-512.png`,
+  `${BASE}icons/icon-maskable-512.png`,
+  `${BASE}icons/icon-180.png`,
+  `${BASE}icons/favicon.svg`,
+  ...self.__SANJEH_PRECACHE__.map((asset) => `${BASE}${asset}`),
 ];
 
 self.addEventListener('install', (event) => {
@@ -50,14 +55,18 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put('/index.html', copy));
+          if (response.ok) {
+            const copy = response.clone();
+            caches
+              .open(SHELL_CACHE)
+              .then((cache) => cache.put(`${BASE}index.html`, copy));
+          }
           return response;
         })
         .catch(() =>
           caches
-            .match('/index.html')
-            .then((cached) => cached || caches.match('/')),
+            .match(`${BASE}index.html`)
+            .then((cached) => cached || caches.match(BASE)),
         ),
     );
     return;

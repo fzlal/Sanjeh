@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Exam, ExamSession } from '@/types';
 import { useSettings } from './settings-provider';
 import { useAppData } from './use-app-data';
@@ -14,7 +14,7 @@ import { ResultsScreen } from '@/features/results/results-screen';
 import { SettingsScreen } from '@/features/settings/settings-screen';
 import { useI18n } from '@/i18n';
 import { canStartExam } from '@/lib/scheduling';
-import { createSession } from '@/lib/session';
+import { createSession, settleSession } from '@/lib/session';
 import { createId } from '@/lib/id';
 import {
   removeExam,
@@ -22,6 +22,7 @@ import {
   saveExam,
   saveSession,
 } from '@/storage/db';
+import { requestPersistentStorage } from '@/storage/durability';
 
 type Route =
   | { name: 'dashboard' }
@@ -39,6 +40,10 @@ export function App() {
   const [route, setRoute] = useState<Route>({ name: 'dashboard' });
   const [lastSubmitted, setLastSubmitted] = useState<ExamSession | undefined>();
 
+  useEffect(() => {
+    void requestPersistentStorage();
+  }, []);
+
   const goDashboard = useCallback(() => setRoute({ name: 'dashboard' }), []);
   const goSettings = useCallback(() => setRoute({ name: 'settings' }), []);
   const openResults = useCallback((session: ExamSession) => {
@@ -55,13 +60,32 @@ export function App() {
     [refresh],
   );
 
+  const openSession = useCallback(
+    async (session: ExamSession) => {
+      const settled = settleSession(session);
+      if (settled.changed) {
+        try {
+          await saveSession(settled.session);
+        } catch {
+          notify(t('storageUnavailable'), 'error');
+        }
+      }
+      if (settled.session.status === 'submitted') {
+        handleSubmitted(settled.session);
+        return;
+      }
+      setRoute({ name: 'exam', sessionId: session.id });
+    },
+    [handleSubmitted, notify, t],
+  );
+
   const startExam = useCallback(
     async (exam: Exam) => {
       const existing = sessions
         .filter((session) => session.examId === exam.id && session.status === 'active')
         .sort((a, b) => b.startedAt - a.startedAt)[0];
       if (existing) {
-        setRoute({ name: 'exam', sessionId: existing.id });
+        await openSession(existing);
         return;
       }
       const check = canStartExam(exam);
@@ -78,7 +102,7 @@ export function App() {
         notify(t('storageUnavailable'), 'error');
       }
     },
-    [notify, refresh, sessions, t],
+    [notify, openSession, refresh, sessions, t],
   );
 
   const deleteExam = useCallback(
@@ -185,7 +209,7 @@ export function App() {
           onDuplicate={(exam) => void duplicateExam(exam)}
           onDelete={(exam) => void deleteExam(exam)}
           onStart={(exam) => void startExam(exam)}
-          onResume={(session) => setRoute({ name: 'exam', sessionId: session.id })}
+          onResume={(session) => void openSession(session)}
           onReview={openResults}
         />
       )}
@@ -194,6 +218,7 @@ export function App() {
         <SettingsScreen
           exams={exams}
           sessions={sessions}
+          onBack={goDashboard}
           onDataReplaced={() => {
             void reloadSettings();
             void refresh();
